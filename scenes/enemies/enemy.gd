@@ -4,8 +4,21 @@ extends CharacterBody2D
 ## triangle. Melee types march left down their lane (gap-seekers aim for wall
 ## gaps) and attack whatever damageable thing they bump into. Ranged types stop
 ## at attack_range and shell the nearest target (wall, tower, core, or player).
-## Vehicle silhouettes are drawn facing down/+y inside _visual, which is
-## rotated 90° so they face the direction of travel (left).
+## Vehicle art (assets/enemy_*.png) faces up inside _visual, which is rotated
+## so it faces the direction of travel (left). Ranged types swivel the whole
+## vehicle to track their victim while parked.
+
+const FACE_LEFT := -PI / 2.0  # up-facing art rotated to the travel direction
+const VEHICLE_LENGTH := 1.45  # sprite length relative to body_size (collision box)
+
+const VEHICLE_TEXTURES: Dictionary = {
+	"light_tank": preload("res://assets/enemy_grunt.png"),
+	"buggy": preload("res://assets/enemy_runner.png"),
+	"bike": preload("res://assets/enemy_stinger.png"),
+	"apc": preload("res://assets/enemy_brute.png"),
+	"siege": preload("res://assets/enemy_ogre.png"),
+	"artillery": preload("res://assets/enemy_spitter.png"),
+}
 
 var stats: Dictionary
 var hp: float
@@ -21,7 +34,6 @@ var _cooldown_left: float = 0.0
 var _lost_contact: float = 0.0
 var _bar: HealthBar
 var _visual: Node2D
-var _barrel: Node2D = null  # artillery only: pivots to track the current victim
 
 func setup(type: String, wall_line_x: float, gap_ys: Array, core: Node2D, wave: int = 1) -> void:
 	type_key = type
@@ -51,7 +63,7 @@ func _ready() -> void:
 	add_child(shape)
 
 	_visual = Node2D.new()
-	_visual.rotation = PI / 2.0  # art faces +y; travel direction is -x
+	_visual.rotation = FACE_LEFT
 	add_child(_visual)
 	_build_vehicle()
 
@@ -60,88 +72,13 @@ func _ready() -> void:
 	_bar.position = Vector2(0, -stats.body_size / 2.0 - 8.0)
 	add_child(_bar)
 
-# --- Vehicle drawing (all silhouettes face down; +y = forward) ---
-
-func _add_poly(pts: PackedVector2Array, color: Color, parent: Node2D = null) -> Polygon2D:
-	var p := Polygon2D.new()
-	p.polygon = pts
-	p.color = color
-	(parent if parent != null else _visual).add_child(p)
-	return p
-
-func _rect_pts(center: Vector2, size: Vector2) -> PackedVector2Array:
-	var h := size / 2.0
-	return PackedVector2Array([
-		center + Vector2(-h.x, -h.y), center + Vector2(h.x, -h.y),
-		center + Vector2(h.x, h.y), center + Vector2(-h.x, h.y),
-	])
-
-func _octagon_pts(radius: float, center := Vector2.ZERO) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	for i in range(8):
-		var a := TAU * (i + 0.5) / 8.0
-		pts.append(center + Vector2(cos(a), sin(a)) * radius)
-	return pts
-
 func _build_vehicle() -> void:
-	var s: float = stats.body_size
-	var hull: Color = stats.color
-	var dark := Color(0.16, 0.16, 0.18)
-	var accent: Color = hull.lightened(0.35)
-	match stats.vehicle:
-		"buggy":  # runner — light fast buggy on four exposed wheels
-			for wx in [-0.4, 0.4]:
-				for wy in [-0.33, 0.33]:
-					_add_poly(_rect_pts(Vector2(wx, wy) * s, Vector2(0.2, 0.3) * s), dark)
-			_add_poly(PackedVector2Array([
-				Vector2(-0.32, -0.5) * s, Vector2(0.32, -0.5) * s,
-				Vector2(0.15, 0.55) * s, Vector2(-0.15, 0.55) * s,
-			]), hull)
-			_add_poly(_rect_pts(Vector2(0, -0.05) * s, Vector2(0.22, 0.26) * s), accent)
-		"bike":  # stinger — two inline wheels, slim body
-			_add_poly(_rect_pts(Vector2(0, -0.5) * s, Vector2(0.14, 0.34) * s), dark)
-			_add_poly(_rect_pts(Vector2(0, 0.5) * s, Vector2(0.14, 0.34) * s), dark)
-			_add_poly(PackedVector2Array([
-				Vector2(-0.16, -0.32) * s, Vector2(0.16, -0.32) * s, Vector2(0.22, 0.05) * s,
-				Vector2(0.12, 0.4) * s, Vector2(-0.12, 0.4) * s, Vector2(-0.22, 0.05) * s,
-			]), hull)
-			_add_poly(_rect_pts(Vector2(0, -0.05) * s, Vector2(0.16, 0.2) * s), accent)
-		"apc":  # brute — six-wheeled slab
-			for wy in [-0.34, 0.0, 0.34]:
-				_add_poly(_rect_pts(Vector2(-0.45, wy) * s, Vector2(0.18, 0.26) * s), dark)
-				_add_poly(_rect_pts(Vector2(0.45, wy) * s, Vector2(0.18, 0.26) * s), dark)
-			_add_poly(PackedVector2Array([
-				Vector2(-0.32, -0.52) * s, Vector2(0.32, -0.52) * s, Vector2(0.45, -0.35) * s,
-				Vector2(0.45, 0.35) * s, Vector2(0.32, 0.52) * s, Vector2(-0.32, 0.52) * s,
-				Vector2(-0.45, 0.35) * s, Vector2(-0.45, -0.35) * s,
-			]), hull)
-			_add_poly(_octagon_pts(0.18 * s, Vector2(0, -0.05) * s), accent)
-		"siege":  # ogre — dozer blade up front, fat short cannon
-			_add_poly(_rect_pts(Vector2(-0.42, 0) * s, Vector2(0.26, 1.0) * s), dark)
-			_add_poly(_rect_pts(Vector2(0.42, 0) * s, Vector2(0.26, 1.0) * s), dark)
-			_add_poly(_rect_pts(Vector2.ZERO, Vector2(0.66, 0.85) * s), hull)
-			_add_poly(PackedVector2Array([
-				Vector2(-0.55, 0.42) * s, Vector2(0.55, 0.42) * s,
-				Vector2(0.42, 0.62) * s, Vector2(-0.42, 0.62) * s,
-			]), hull.darkened(0.3))
-			_add_poly(_rect_pts(Vector2(0, 0.3) * s, Vector2(0.16, 0.5) * s), dark)
-			_add_poly(_octagon_pts(0.3 * s), accent)
-		"artillery":  # spitter — long howitzer barrel that tracks its target
-			_add_poly(_rect_pts(Vector2(-0.4, 0) * s, Vector2(0.2, 0.9) * s), dark)
-			_add_poly(_rect_pts(Vector2(0.4, 0) * s, Vector2(0.2, 0.9) * s), dark)
-			_add_poly(_rect_pts(Vector2.ZERO, Vector2(0.6, 0.78) * s), hull)
-			_barrel = Node2D.new()
-			add_child(_barrel)
-			_add_poly(_rect_pts(Vector2(0, 0.45) * s, Vector2(0.11, 0.9) * s), dark, _barrel)
-			_add_poly(_rect_pts(Vector2(0, 0.85) * s, Vector2(0.18, 0.14) * s), dark, _barrel)
-			_add_poly(_octagon_pts(0.24 * s), accent)
-		_:  # grunt — classic light tank
-			_add_poly(_rect_pts(Vector2(-0.42, 0) * s, Vector2(0.24, 1.0) * s), dark)
-			_add_poly(_rect_pts(Vector2(0.42, 0) * s, Vector2(0.24, 1.0) * s), dark)
-			_add_poly(_rect_pts(Vector2.ZERO, Vector2(0.7, 0.84) * s), hull)
-			_add_poly(_rect_pts(Vector2(0, 0.34) * s, Vector2(0.6, 0.12) * s), accent)
-			_add_poly(_rect_pts(Vector2(0, 0.34) * s, Vector2(0.1, 0.68) * s), dark)
-			_add_poly(_octagon_pts(0.26 * s), accent)
+	var tex: Texture2D = VEHICLE_TEXTURES[stats.vehicle]
+	var spr := Sprite2D.new()
+	spr.texture = tex
+	var k: float = stats.body_size * VEHICLE_LENGTH / maxf(tex.get_width(), tex.get_height())
+	spr.scale = Vector2(k, k)
+	_visual.add_child(spr)
 
 func _physics_process(delta: float) -> void:
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
@@ -153,17 +90,15 @@ func _physics_process(delta: float) -> void:
 		var victim := _nearest_victim()
 		if victim != null:
 			velocity = Vector2.ZERO
-			if _barrel != null:
-				# Barrel art points +y inside _visual (rotated PI/2): world
-				# angle a needs local rotation a - PI. Rest pose 0 = facing -x.
-				var aim := (victim.global_position - global_position).angle() - PI
-				_barrel.rotation = lerp_angle(_barrel.rotation, aim, 10.0 * delta)
+			# Whole vehicle swivels toward the victim while parked (the art has
+			# no separate turret piece yet). Up-facing art: rotation = angle + PI/2.
+			var aim := (victim.global_position - global_position).angle() + PI / 2.0
+			_visual.rotation = lerp_angle(_visual.rotation, aim, 6.0 * delta)
 			if _cooldown_left <= 0.0:
 				_fire_at(victim)
 				_cooldown_left = stats.attack_cooldown
 			return
-		if _barrel != null:
-			_barrel.rotation = lerp_angle(_barrel.rotation, 0.0, 6.0 * delta)
+		_visual.rotation = lerp_angle(_visual.rotation, FACE_LEFT, 4.0 * delta)
 
 	velocity = (_current_goal() - global_position).normalized() * stats.speed
 	move_and_slide()
