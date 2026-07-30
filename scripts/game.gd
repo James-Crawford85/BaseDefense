@@ -1,18 +1,25 @@
 extends Node
-## Autoload: run-wide state (money, kills, stats). Reset at the start of every run.
+## Autoload: run-wide state — gold, XP/levels, kills. Reset every run.
+## Level-ups bank "stat picks" the player spends at the next intermission.
 
 signal money_changed(amount: int)
 
-var money: int = 0
+var money: int = 0  # gold
 var kills: int = 0
 var waves_survived: int = 0
 var total_earned: int = 0
+var xp: int = 0
+var level: int = 1
+var pending_picks: int = 0
 
 func reset() -> void:
-	money = 40
+	money = 30
 	kills = 0
 	waves_survived = 0
 	total_earned = 0
+	xp = 0
+	level = 1
+	pending_picks = 0
 	Turret.damage_mult = 1.0
 	money_changed.emit(money)
 
@@ -28,6 +35,15 @@ func spend(amount: int) -> bool:
 	money_changed.emit(money)
 	return true
 
-func register_kill(value: int) -> void:
+func xp_needed() -> int:
+	return 8 + 6 * level
+
+func add_xp(amount: int) -> void:
+	xp += amount
+	while xp >= xp_needed():
+		xp -= xp_needed()
+		level += 1
+		pending_picks += 1
+
+func register_kill() -> void:
 	kills += 1
-	add_money(value)

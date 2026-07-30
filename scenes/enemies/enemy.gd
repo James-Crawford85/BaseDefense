@@ -157,6 +157,15 @@ func take_damage(amount: float) -> void:
 		die()
 
 func die() -> void:
-	Game.register_kill(stats.money)
-	Fx.float_text(global_position, "+$%d" % stats.money, Color(1.0, 0.9, 0.4))
+	Game.register_kill()
+	var gold := Pickup.new()
+	gold.kind = "gold"
+	gold.value = stats.money
+	gold.position = global_position + Vector2(randf_range(-10, 10), randf_range(-10, 10))
+	get_parent().add_child(gold)
+	var orb := Pickup.new()
+	orb.kind = "xp"
+	orb.value = maxi(1, int(round(stats.money * 0.8)))
+	orb.position = global_position + Vector2(randf_range(-10, 10), randf_range(-10, 10))
+	get_parent().add_child(orb)
 	queue_free()

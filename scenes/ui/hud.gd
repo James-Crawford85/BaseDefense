@@ -4,10 +4,16 @@ extends CanvasLayer
 ## overlays. Runs in ALWAYS process mode so menus work while the tree is paused.
 
 const BAR_W := 200.0
+const CLASS_ORDER: Array = ["assault", "heavy", "scout"]
 
 var main  # main.gd (untyped: it has no class_name)
 var _w: float
 var _h: float
+var _selected_idx := 0
+var _class_panels: Array = []
+var _xp_fill: ColorRect
+var _level_label: Label
+var _xp_bar_w: float
 
 var shop: ShopPanel
 var _money_label: Label
@@ -43,6 +49,19 @@ func _build_hud() -> void:
 	_wave_label.size = Vector2(300, 30)
 	_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_kills_label = _label(self, "Kills: 0", Vector2(_w - 100, 12), 16)
+
+	_level_label = _label(self, "Lv 1", Vector2(16, 36), 13, Color(0.5, 0.95, 0.55))
+	var xpbg := ColorRect.new()
+	xpbg.color = Color(0, 0, 0, 0.5)
+	xpbg.position = Vector2(58, 40)
+	xpbg.size = Vector2(_w - 74, 8)
+	add_child(xpbg)
+	_xp_bar_w = _w - 76
+	_xp_fill = ColorRect.new()
+	_xp_fill.color = Color(0.5, 0.9, 0.4)
+	_xp_fill.position = Vector2(1, 1)
+	_xp_fill.size = Vector2(0, 6)
+	xpbg.add_child(_xp_fill)
 
 	_message_label = _label(self, "", Vector2(0, _h * 0.22), 36)
 	_message_label.size = Vector2(_w, 60)
@@ -84,13 +103,59 @@ func _build_shop() -> void:
 
 func _build_menu() -> void:
 	_menu_overlay = _overlay()
-	_centered_label(_menu_overlay, "BASE DEFENSE", _h * 0.16, 48)
-	_centered_label(_menu_overlay, "Hold the line for 10 waves.", _h * 0.24, 20, Color(0.85, 0.85, 0.9))
-	_centered_label(_menu_overlay, "Press Enter / Start to begin", _h * 0.52, 24, Color(1.0, 0.9, 0.4))
+	_centered_label(_menu_overlay, "BASE DEFENSE", _h * 0.07, 44)
+	_centered_label(_menu_overlay, "Choose your tank", _h * 0.145, 20, Color(0.85, 0.85, 0.9))
+	var panel_w := 172.0
+	var gap := 8.0
+	var x0 := (_w - (panel_w * 3 + gap * 2)) / 2.0
+	for i in range(CLASS_ORDER.size()):
+		var data: Dictionary = TankData.CLASSES[CLASS_ORDER[i]]
+		var panel := PanelContainer.new()
+		panel.position = Vector2(x0 + i * (panel_w + gap), _h * 0.21)
+		panel.custom_minimum_size = Vector2(panel_w, 220)
+		var vb := VBoxContainer.new()
+		vb.add_theme_constant_override("separation", 4)
+		panel.add_child(vb)
+		var name_l := Label.new()
+		name_l.text = data.label
+		name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_l.add_theme_font_size_override("font_size", 19)
+		name_l.add_theme_color_override("font_color", data.color.lightened(0.4))
+		vb.add_child(name_l)
+		var stats_l := Label.new()
+		stats_l.text = "HP %d\nSpeed %d\nArmor %d\nDamage x%.2f\nSlots: %d\nStarts: %s" % [
+			int(data.hp), int(data.speed), int(data.armor), data.damage_mult,
+			data.slots.size(), WeaponData.WEAPONS[data.start_weapon].label]
+		stats_l.add_theme_font_size_override("font_size", 13)
+		vb.add_child(stats_l)
+		var blurb_l := Label.new()
+		blurb_l.text = data.blurb
+		blurb_l.add_theme_font_size_override("font_size", 11)
+		blurb_l.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+		blurb_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		blurb_l.custom_minimum_size = Vector2(panel_w - 16, 0)
+		vb.add_child(blurb_l)
+		panel.gui_input.connect(_on_class_panel_input.bind(i))
+		_menu_overlay.add_child(panel)
+		_class_panels.append(panel)
+	_select_class(0)
+	_centered_label(_menu_overlay, "◄ ► to choose — Enter / Start to roll out", _h * 0.52, 20, Color(1.0, 0.9, 0.4))
 	var controls := _centered_label(_menu_overlay,
-		"WASD / left stick — move · Space — dash\nYou fire automatically at the nearest enemy.\nBetween waves: spend money on yourself, the walls...\nor risky turrets out in the field.",
-		_h * 0.62, 15, Color(0.7, 0.7, 0.75))
-	controls.size.y = 120
+		"WASD / left stick — drive (the hull turns toward your heading)\nSpace — boost · Main turret fires 360°, side mounts only cover\ntheir half — face the fight! Kills drop gold and XP orbs:\ndrive over them to collect. Spend both between waves.",
+		_h * 0.6, 14, Color(0.7, 0.7, 0.75))
+	controls.size.y = 140
+
+func _on_class_panel_input(event: InputEvent, idx: int) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		_select_class(idx)
+
+func _select_class(i: int) -> void:
+	_selected_idx = i
+	for j in range(_class_panels.size()):
+		_class_panels[j].modulate = Color(1, 1, 1) if j == i else Color(0.55, 0.55, 0.6, 0.85)
+
+func selected_class() -> String:
+	return CLASS_ORDER[_selected_idx]
 
 func _build_results() -> void:
 	_results_overlay = _overlay()
@@ -132,11 +197,17 @@ func _process(_delta: float) -> void:
 		_core_fill.size.x = (BAR_W - 4) * clampf(c.hp / c.max_hp, 0.0, 1.0)
 		_core_value.text = "%d / %d" % [ceili(c.hp), int(c.max_hp)]
 	_kills_label.text = "Kills: %d" % Game.kills
+	_level_label.text = "Lv %d" % Game.level
+	_xp_fill.size.x = _xp_bar_w * clampf(float(Game.xp) / float(Game.xp_needed()), 0.0, 1.0)
 
 	match main.state:
 		main.State.MENU:
+			if Input.is_action_just_pressed("ui_left"):
+				_select_class((_selected_idx + CLASS_ORDER.size() - 1) % CLASS_ORDER.size())
+			if Input.is_action_just_pressed("ui_right"):
+				_select_class((_selected_idx + 1) % CLASS_ORDER.size())
 			if Input.is_action_just_pressed("ui_accept"):
-				main.begin_run()
+				main.begin_run(selected_class())
 		main.State.GAME_OVER, main.State.VICTORY:
 			if Input.is_action_just_pressed("ui_accept"):
 				main.restart_run()

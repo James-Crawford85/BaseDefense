@@ -45,11 +45,7 @@ func _ready() -> void:
 	Fx.world = entity_layer
 
 	_build_fortress()
-
-	player = Player.new()
-	player.position = Vector2(arena_w / 2.0, arena_h * 0.85)
-	entity_layer.add_child(player)
-	player.died.connect(_on_player_died)
+	# player is created in begin_run once a tank class is chosen
 
 	wave_manager = WaveManager.new()
 	wave_manager.arena = entity_layer
@@ -167,7 +163,12 @@ func _process(delta: float) -> void:
 
 # --- Run flow ---
 
-func begin_run() -> void:
+func begin_run(tank_class: String = "assault") -> void:
+	player = Player.new()
+	player.setup(tank_class)
+	player.position = Vector2(arena_w / 2.0, arena_h * 0.85)
+	entity_layer.add_child(player)
+	player.died.connect(_on_player_died)
 	get_tree().paused = false
 	hud.hide_menu()
 	_start_wave(0)
@@ -191,6 +192,9 @@ func _on_wave_cleared(index: int) -> void:
 	var bonus := WaveData.wave_clear_bonus(index)
 	Game.add_money(bonus)
 	Fx.float_text(Vector2(arena_w / 2.0 - 40, arena_h * 0.4), "Wave clear +$%d" % bonus, Color(1, 0.9, 0.4))
+	# Vacuum leftover drops to the player so nothing is stranded up-field.
+	for p in get_tree().get_nodes_in_group("pickups"):
+		p.vacuum = true
 	if index + 1 >= FINAL_WAVE:
 		_end_run(true)
 	else:
