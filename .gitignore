@@ -6,7 +6,7 @@ export_presets.cfg
 *.pck
 *.zip
 
-# Raw downloads (canonical copies live in assets/)
-/download.png
-/download.png.import
+# Loose images at the repo root are scratch/downloads — canonical copies live in assets/
+/*.png
+/*.png.import
 

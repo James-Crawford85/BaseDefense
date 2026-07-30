@@ -17,6 +17,7 @@ var _fire_cooldown: float = 0.0
 var _invuln: float = 0.0
 var _dash_cooldown: float = 0.0
 var _dash_time: float = 0.0
+var _sprite: Sprite2D
 
 func _ready() -> void:
 	add_to_group("players")
@@ -27,14 +28,13 @@ func _ready() -> void:
 	circle.radius = 14.0
 	shape.shape = circle
 	add_child(shape)
-	var poly := Polygon2D.new()
-	var pts := PackedVector2Array()
-	for i in range(16):
-		var a := TAU * i / 16.0
-		pts.append(Vector2(cos(a), sin(a)) * 14.0)
-	poly.polygon = pts
-	poly.color = Color(0.35, 0.75, 0.95)
-	add_child(poly)
+	# Top-down soldier art faces up at rotation 0; pivot sits on the body so
+	# the rifle pokes ahead of the collision circle when rotated.
+	_sprite = Sprite2D.new()
+	_sprite.texture = load("res://assets/soldier.png")
+	_sprite.scale = Vector2.ONE * 0.08
+	_sprite.offset = Vector2(0, -140)
+	add_child(_sprite)
 
 func _physics_process(delta: float) -> void:
 	_fire_cooldown -= delta
@@ -51,14 +51,22 @@ func _physics_process(delta: float) -> void:
 	velocity = input_dir * speed
 	move_and_slide()
 
-	if _fire_cooldown <= 0.0:
-		var target := Targeting.nearest_enemy(get_tree(), global_position, fire_range)
-		if target != null:
-			var p := Projectile.new()
-			p.setup(target.global_position - global_position, damage, fire_range + 80.0, Color(0.5, 0.9, 1.0))
-			p.position = global_position
-			get_parent().add_child(p)
-			_fire_cooldown = 1.0 / fire_rate
+	var aim := Targeting.nearest_enemy(get_tree(), global_position, fire_range)
+	if _fire_cooldown <= 0.0 and aim != null:
+		var p := Projectile.new()
+		p.setup(aim.global_position - global_position, damage, fire_range + 80.0, Color(0.5, 0.9, 1.0))
+		p.position = global_position
+		get_parent().add_child(p)
+		_fire_cooldown = 1.0 / fire_rate
+
+	# Face the aim target while one is in range, otherwise the movement direction.
+	var face_dir := Vector2.ZERO
+	if aim != null:
+		face_dir = aim.global_position - global_position
+	elif input_dir != Vector2.ZERO:
+		face_dir = input_dir
+	if face_dir != Vector2.ZERO:
+		_sprite.rotation = lerp_angle(_sprite.rotation, face_dir.angle() + PI / 2.0, 14.0 * delta)
 
 func take_damage(amount: float) -> void:
 	if _invuln > 0.0 or hp <= 0.0:
