@@ -19,9 +19,9 @@ var _cooldown_left: float = 0.0
 var _lost_contact: float = 0.0
 var _bar: HealthBar
 
-func setup(type: String, wall_line_y: float, gap_xs: Array, core: Node2D) -> void:
+func setup(type: String, wall_line_y: float, gap_xs: Array, core: Node2D, wave: int = 1) -> void:
 	type_key = type
-	stats = EnemyData.stats_for(type)
+	stats = EnemyData.wave_scaled(type, wave)
 	hp = stats.hp
 	max_hp = stats.hp
 	_wall_line_y = wall_line_y

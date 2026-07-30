@@ -47,6 +47,6 @@ func _process(delta: float) -> void:
 
 func _spawn(type: String) -> void:
 	var enemy := Enemy.new()
-	enemy.setup(type, wall_line_y, gap_xs, core)
+	enemy.setup(type, wall_line_y, gap_xs, core, _wave_index + 1)
 	enemy.position = Vector2(randf_range(spawn_x_min, spawn_x_max), randf_range(-80.0, -40.0))
 	arena.add_child(enemy)

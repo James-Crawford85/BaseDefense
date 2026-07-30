@@ -35,6 +35,13 @@ const TYPES: Dictionary = {
 	},
 }
 
+# Per-wave difficulty growth, applied at spawn time (see wave_scaled):
+# HP outpaces damage so late waves demand both firepower AND survivability;
+# bounty grows slower than either so income never fully keeps pace.
+const HP_GROWTH := 0.18
+const DAMAGE_GROWTH := 0.12
+const MONEY_GROWTH := 0.08
+
 static var _cache: Dictionary = {}
 
 static func stats_for(key: String) -> Dictionary:
@@ -65,3 +72,11 @@ static func stats_for(key: String) -> Dictionary:
 	}
 	_cache[key] = stats
 	return stats
+
+static func wave_scaled(key: String, wave: int) -> Dictionary:
+	var s := stats_for(key).duplicate()
+	var w := maxi(wave - 1, 0)
+	s.hp = s.hp * (1.0 + HP_GROWTH * w)
+	s.damage = s.damage * (1.0 + DAMAGE_GROWTH * w)
+	s.money = int(round(s.money * (1.0 + MONEY_GROWTH * w)))
+	return s
