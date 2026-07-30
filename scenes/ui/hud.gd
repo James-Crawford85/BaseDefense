@@ -3,9 +3,11 @@ extends CanvasLayer
 ## All screen-space UI: HUD bars/labels, wave messages, shop, menu and results
 ## overlays. Runs in ALWAYS process mode so menus work while the tree is paused.
 
-const BAR_W := 220.0
+const BAR_W := 200.0
 
 var main  # main.gd (untyped: it has no class_name)
+var _w: float
+var _h: float
 
 var shop: ShopPanel
 var _money_label: Label
@@ -24,6 +26,9 @@ var _results_stats: Label
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 10
+	var vs := get_viewport().get_visible_rect().size
+	_w = vs.x
+	_h = vs.y
 	_build_hud()
 	_build_shop()
 	_build_menu()
@@ -33,21 +38,21 @@ func _ready() -> void:
 	_menu_overlay.visible = true
 
 func _build_hud() -> void:
-	_money_label = _label(self, "$0", Vector2(20, 10), 22, Color(1.0, 0.9, 0.4))
-	_wave_label = _label(self, "Wave –", Vector2(490, 10), 20)
+	_money_label = _label(self, "$0", Vector2(16, 8), 22, Color(1.0, 0.9, 0.4))
+	_wave_label = _label(self, "Wave –", Vector2(_w / 2.0 - 150, 10), 20)
 	_wave_label.size = Vector2(300, 30)
 	_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_kills_label = _label(self, "Kills: 0", Vector2(1140, 12), 18)
+	_kills_label = _label(self, "Kills: 0", Vector2(_w - 100, 12), 16)
 
-	_message_label = _label(self, "", Vector2(0, 170), 40)
-	_message_label.size = Vector2(1280, 60)
+	_message_label = _label(self, "", Vector2(0, _h * 0.22), 36)
+	_message_label.size = Vector2(_w, 60)
 	_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_message_label.visible = false
 
-	var pbar := _build_bar(Vector2(20, 688), "YOU", Color(0.35, 0.75, 0.95))
+	var pbar := _build_bar(Vector2(16, _h - 28), "YOU", Color(0.35, 0.75, 0.95))
 	_player_fill = pbar.fill
 	_player_value = pbar.value
-	var cbar := _build_bar(Vector2(980, 688), "CORE", Color(0.3, 0.85, 0.8))
+	var cbar := _build_bar(Vector2(_w - BAR_W - 16, _h - 28), "CORE", Color(0.3, 0.85, 0.8))
 	_core_fill = cbar.fill
 	_core_value = cbar.value
 
@@ -62,9 +67,14 @@ func _build_bar(pos: Vector2, caption: String, fill_color: Color) -> Dictionary:
 	fill.position = Vector2(2, 2)
 	fill.size = Vector2(BAR_W - 4, 14)
 	bg.add_child(fill)
-	var cap := _label(self, caption, pos + Vector2(0, -22), 14)
+	var cap := _label(self, caption, pos + Vector2(0, -20), 13)
 	cap.add_theme_color_override("font_color", fill_color)
-	var value := _label(self, "", pos + Vector2(BAR_W + 8, 0), 14)
+	# Value text centered inside the bar (no room beside it in portrait layout).
+	var value := Label.new()
+	value.size = Vector2(BAR_W, 18)
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	value.add_theme_font_size_override("font_size", 12)
+	bg.add_child(value)
 	return {"fill": fill, "value": value}
 
 func _build_shop() -> void:
@@ -74,18 +84,20 @@ func _build_shop() -> void:
 
 func _build_menu() -> void:
 	_menu_overlay = _overlay()
-	_centered_label(_menu_overlay, "BASE DEFENSE", 170, 64)
-	_centered_label(_menu_overlay, "Hold the line for 10 waves.", 270, 22, Color(0.85, 0.85, 0.9))
-	_centered_label(_menu_overlay, "Press Enter / Start to begin", 420, 26, Color(1.0, 0.9, 0.4))
-	_centered_label(_menu_overlay,
-		"WASD or left stick — move      Space — dash      You fire automatically at the nearest enemy\nBetween waves: spend money on yourself, the walls... or risky turrets outside the walls.",
-		510, 16, Color(0.7, 0.7, 0.75))
+	_centered_label(_menu_overlay, "BASE DEFENSE", _h * 0.16, 48)
+	_centered_label(_menu_overlay, "Hold the line for 10 waves.", _h * 0.24, 20, Color(0.85, 0.85, 0.9))
+	_centered_label(_menu_overlay, "Press Enter / Start to begin", _h * 0.52, 24, Color(1.0, 0.9, 0.4))
+	var controls := _centered_label(_menu_overlay,
+		"WASD / left stick — move · Space — dash\nYou fire automatically at the nearest enemy.\nBetween waves: spend money on yourself, the walls...\nor risky turrets out in the field.",
+		_h * 0.62, 15, Color(0.7, 0.7, 0.75))
+	controls.size.y = 120
 
 func _build_results() -> void:
 	_results_overlay = _overlay()
-	_results_title = _centered_label(_results_overlay, "", 200, 56)
-	_results_stats = _centered_label(_results_overlay, "", 320, 24, Color(0.85, 0.85, 0.9))
-	_centered_label(_results_overlay, "Press Enter / Start to play again", 480, 22, Color(1.0, 0.9, 0.4))
+	_results_title = _centered_label(_results_overlay, "", _h * 0.2, 42)
+	_results_stats = _centered_label(_results_overlay, "", _h * 0.32, 22, Color(0.85, 0.85, 0.9))
+	_results_stats.size.y = 120
+	_centered_label(_results_overlay, "Press Enter / Start to play again", _h * 0.55, 20, Color(1.0, 0.9, 0.4))
 
 func _overlay() -> Control:
 	var rect := ColorRect.new()
@@ -106,7 +118,7 @@ func _label(parent: Node, text: String, pos: Vector2, font_size: int, color: Col
 
 func _centered_label(parent: Control, text: String, y: float, font_size: int, color: Color = Color.WHITE) -> Label:
 	var l := _label(parent, text, Vector2(0, y), font_size, color)
-	l.size = Vector2(1280, font_size * 2.6)
+	l.size = Vector2(_w, font_size * 2.6)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return l
 

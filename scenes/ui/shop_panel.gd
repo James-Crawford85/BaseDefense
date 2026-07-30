@@ -17,10 +17,10 @@ func _ready() -> void:
 	anchor_top = 0.5
 	anchor_right = 0.5
 	anchor_bottom = 0.5
-	offset_left = -290
-	offset_top = -200
-	offset_right = 290
-	offset_bottom = 200
+	offset_left = -250
+	offset_top = -220
+	offset_right = 250
+	offset_bottom = 220
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 8)
@@ -29,7 +29,7 @@ func _ready() -> void:
 	var title := Label.new()
 	title.text = "INTERMISSION — SPEND YOUR MONEY"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_font_size_override("font_size", 19)
 	vbox.add_child(title)
 
 	_countdown_label = Label.new()
@@ -39,7 +39,7 @@ func _ready() -> void:
 	vbox.add_child(_countdown_label)
 
 	var tabs := TabContainer.new()
-	tabs.custom_minimum_size = Vector2(560, 250)
+	tabs.custom_minimum_size = Vector2(460, 270)
 	tabs.get_tab_bar().focus_mode = Control.FOCUS_NONE
 	vbox.add_child(tabs)
 	_build_tab(tabs, "Character", UpgradeData.CHARACTER)

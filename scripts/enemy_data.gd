@@ -4,7 +4,7 @@ class_name EnemyData
 const TYPES: Dictionary = {
 	"grunt": {
 		"hp": 30.0, "speed": 60.0, "damage": 8.0, "attack_cooldown": 1.0,
-		"money": 5, "body_size": 24.0, "color": Color(0.55, 0.7, 0.45), "shape": "square",
+		"money": 5, "body_size": 24.0, "color": Color(0.5, 0.32, 0.6), "shape": "square",
 		"seeks_gaps": false,
 	},
 	"runner": {

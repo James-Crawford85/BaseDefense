@@ -8,6 +8,8 @@ var arena: Node2D
 var wall_line_y: float = 0.0
 var gap_xs: Array = []
 var core: Node2D
+var spawn_x_min: float = 70.0
+var spawn_x_max: float = 1210.0
 
 var _schedule: Array = []
 var _elapsed: float = 0.0
@@ -46,5 +48,5 @@ func _process(delta: float) -> void:
 func _spawn(type: String) -> void:
 	var enemy := Enemy.new()
 	enemy.setup(type, wall_line_y, gap_xs, core)
-	enemy.position = Vector2(randf_range(70.0, 1210.0), randf_range(-80.0, -40.0))
+	enemy.position = Vector2(randf_range(spawn_x_min, spawn_x_max), randf_range(-80.0, -40.0))
 	arena.add_child(enemy)

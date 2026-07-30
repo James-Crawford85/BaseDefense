@@ -5,13 +5,18 @@ extends Node2D
 
 enum State { MENU, WAVE, INTERMISSION, GAME_OVER, VICTORY }
 
-const WALL_Y := 520.0
-const CORE_POS := Vector2(640.0, 630.0)
-const WALL_SLOTS := 12
-const GAP_SLOTS: Array = [2, 9]
+const WALL_SLOTS := 8
+const GAP_SLOTS: Array = [2, 5]
 const INTERMISSION_TIME := 25.0
 const FINAL_WAVE := 10
 const TURRET_OFFSET := Vector2(0, -46)
+
+# Layout is derived from the viewport (which matches the background art):
+# grass field on top, battlement walkway at ~78% height, courtyard below it.
+var arena_w: float
+var arena_h: float
+var wall_y: float
+var core_pos: Vector2
 
 var state: State = State.MENU
 var wave_index: int = -1
@@ -26,6 +31,10 @@ var entity_layer: Node2D
 
 func _ready() -> void:
 	Game.reset()
+	arena_w = get_viewport_rect().size.x
+	arena_h = get_viewport_rect().size.y
+	wall_y = arena_h * 0.785
+	core_pos = Vector2(arena_w / 2.0, arena_h * 0.92)
 	_build_camera()
 	_build_background()
 	_build_bounds()
@@ -38,15 +47,17 @@ func _ready() -> void:
 	_build_fortress()
 
 	player = Player.new()
-	player.position = Vector2(640, 565)
+	player.position = Vector2(arena_w / 2.0, arena_h * 0.85)
 	entity_layer.add_child(player)
 	player.died.connect(_on_player_died)
 
 	wave_manager = WaveManager.new()
 	wave_manager.arena = entity_layer
-	wave_manager.wall_line_y = WALL_Y
+	wave_manager.wall_line_y = wall_y
 	wave_manager.gap_xs = _gap_positions()
 	wave_manager.core = core
+	wave_manager.spawn_x_min = 40.0
+	wave_manager.spawn_x_max = arena_w - 40.0
 	add_child(wave_manager)
 	wave_manager.wave_cleared.connect(_on_wave_cleared)
 
@@ -62,14 +73,19 @@ func _ready() -> void:
 
 func _build_camera() -> void:
 	var cam := Camera2D.new()
-	cam.position = Vector2(640, 360)
+	cam.position = Vector2(arena_w / 2.0, arena_h / 2.0)
 	add_child(cam)
 	cam.make_current()
 	Fx.camera = cam
 
 func _build_background() -> void:
-	_add_bg_rect(Rect2(0, WALL_Y, 1280, 720 - WALL_Y), Color(0.12, 0.13, 0.16))
-	_add_bg_rect(Rect2(0, 0, 1280, 50), Color(0.3, 0.1, 0.1, 0.35))
+	var sprite := Sprite2D.new()
+	sprite.texture = load("res://assets/background.png")
+	sprite.centered = false
+	sprite.z_index = -10
+	add_child(sprite)
+	# Faint red tint marking the enemy spawn strip.
+	_add_bg_rect(Rect2(0, 0, arena_w, 40), Color(0.3, 0.1, 0.1, 0.25))
 
 func _add_bg_rect(rect: Rect2, color: Color) -> void:
 	var poly := Polygon2D.new()
@@ -84,11 +100,11 @@ func _add_bg_rect(rect: Rect2, color: Color) -> void:
 	add_child(poly)
 
 func _build_bounds() -> void:
-	_add_static_box(Rect2(-40, -400, 40, 1520), 1 << 0)
-	_add_static_box(Rect2(1280, -400, 40, 1520), 1 << 0)
-	_add_static_box(Rect2(-40, 720, 1360, 40), 1 << 0)
+	_add_static_box(Rect2(-40, -400, 40, arena_h + 800), 1 << 0)
+	_add_static_box(Rect2(arena_w, -400, 40, arena_h + 800), 1 << 0)
+	_add_static_box(Rect2(-40, arena_h, arena_w + 80, 40), 1 << 0)
 	# Top strip only blocks players, so enemies can walk in from above the screen.
-	_add_static_box(Rect2(-40, -10, 1360, 30), 1 << 5)
+	_add_static_box(Rect2(-40, -10, arena_w + 80, 30), 1 << 5)
 
 func _add_static_box(rect: Rect2, layer: int) -> void:
 	var body := StaticBody2D.new()
@@ -102,25 +118,28 @@ func _add_static_box(rect: Rect2, layer: int) -> void:
 	body.add_child(shape)
 	add_child(body)
 
+const WALL_MARGIN := 10.0
+
 func _build_fortress() -> void:
-	var slot_width := 1200.0 / WALL_SLOTS
+	var slot_width := (arena_w - WALL_MARGIN * 2.0) / WALL_SLOTS
 	for i in range(WALL_SLOTS):
 		if i in GAP_SLOTS:
 			continue
 		var wall := WallSegment.new()
-		wall.position = Vector2(40.0 + slot_width * (i + 0.5), WALL_Y)
+		wall.seg_size = Vector2(slot_width - 4.0, 36.0)
+		wall.position = Vector2(WALL_MARGIN + slot_width * (i + 0.5), wall_y)
 		entity_layer.add_child(wall)
 		walls.append(wall)
 	core = FortressCore.new()
-	core.position = CORE_POS
+	core.position = core_pos
 	entity_layer.add_child(core)
 	core.core_destroyed.connect(_on_core_destroyed)
 
 func _gap_positions() -> Array:
-	var slot_width := 1200.0 / WALL_SLOTS
+	var slot_width := (arena_w - WALL_MARGIN * 2.0) / WALL_SLOTS
 	var arr: Array = []
 	for i in GAP_SLOTS:
-		arr.append(40.0 + slot_width * (i + 0.5))
+		arr.append(WALL_MARGIN + slot_width * (i + 0.5))
 	return arr
 
 func _process(delta: float) -> void:
@@ -155,7 +174,7 @@ func _on_wave_cleared(index: int) -> void:
 	Game.waves_survived = index + 1
 	var bonus := WaveData.wave_clear_bonus(index)
 	Game.add_money(bonus)
-	Fx.float_text(Vector2(600, 400), "Wave clear +$%d" % bonus, Color(1, 0.9, 0.4))
+	Fx.float_text(Vector2(arena_w / 2.0 - 40, arena_h * 0.4), "Wave clear +$%d" % bonus, Color(1, 0.9, 0.4))
 	if index + 1 >= FINAL_WAVE:
 		_end_run(true)
 	else:
@@ -214,7 +233,7 @@ func turret_spot() -> Vector2:
 
 func can_place_turret() -> bool:
 	var pos := turret_spot()
-	return pos.y < WALL_Y - 60.0 and pos.y > 70.0 and pos.x > 50.0 and pos.x < 1230.0
+	return pos.y < wall_y - 60.0 and pos.y > 70.0 and pos.x > 40.0 and pos.x < arena_w - 40.0
 
 func place_turret() -> void:
 	var t := Turret.new()

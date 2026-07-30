@@ -3,7 +3,7 @@ extends StaticBody2D
 ## One segment of the fortress wall. Darkens as it takes damage; when destroyed
 ## it becomes a passable ruin (node kept alive so the shop can rebuild it).
 
-const SIZE := Vector2(96, 40)
+var seg_size := Vector2(96, 40)  # set by main before add_child to fit the wall slots
 
 var max_hp: float = 120.0
 var hp: float = 120.0
@@ -19,16 +19,16 @@ func _ready() -> void:
 	collision_mask = 0
 	_shape = CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
-	rect.size = SIZE
+	rect.size = seg_size
 	_shape.shape = rect
 	add_child(_shape)
 	_poly = Polygon2D.new()
-	var h := SIZE / 2.0
+	var h := seg_size / 2.0
 	_poly.polygon = PackedVector2Array([Vector2(-h.x, -h.y), Vector2(h.x, -h.y), Vector2(h.x, h.y), Vector2(-h.x, h.y)])
 	add_child(_poly)
 	_bar = HealthBar.new()
-	_bar.width = SIZE.x - 12.0
-	_bar.position = Vector2(0, -SIZE.y / 2.0 - 10.0)
+	_bar.width = seg_size.x - 12.0
+	_bar.position = Vector2(0, -seg_size.y / 2.0 - 10.0)
 	add_child(_bar)
 	_update_visual()
 

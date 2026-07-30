@@ -5,3 +5,8 @@
 export_presets.cfg
 *.pck
 *.zip
+
+# Raw downloads (canonical copies live in assets/)
+/download.png
+/download.png.import
+
