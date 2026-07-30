@@ -1,6 +1,7 @@
 class_name CardPool
 ## Builds the randomized intermission card offers. Cards are plain dicts:
-## {id, kind, key, title, desc, cost, weight}. Weapon cards adapt to the
+## {id, kind, key, title, desc, cost, weight, tier}. tier (1-4) picks the card
+## frame art (weapon upgrades use the target level). Weapon cards adapt to the
 ## player's loadout (mount new vs. upgrade owned). Stat definitions here are
 ## shared by paid shop cards and free level-up picks (player.apply_stat).
 
@@ -27,30 +28,31 @@ static func draw_cards(count: int, wave: int, player: Player, main) -> Array:
 		if owned != null and owned.level < WeaponData.MAX_LEVEL:
 			pool.append({"id": "w_" + key, "kind": "weapon", "key": key,
 				"title": w.label, "desc": "Upgrade to Lv %d" % (owned.level + 1),
-				"cost": int(w.cost) * (owned.level + 1) + wave * 5, "weight": 3})
+				"cost": int(w.cost) * (owned.level + 1) + wave * 5, "weight": 3,
+				"tier": owned.level + 1})
 		elif player.has_empty_slot():
 			pool.append({"id": "w_" + key, "kind": "weapon", "key": key,
 				"title": w.label, "desc": "Mount on an empty slot",
-				"cost": int(w.cost) + wave * 5, "weight": 3})
+				"cost": int(w.cost) + wave * 5, "weight": 3, "tier": 1})
 	for id in STATS:
 		var s: Dictionary = STATS[id]
 		pool.append({"id": "s_" + id, "kind": "stat", "key": id,
-			"title": s.label, "desc": s.desc, "cost": 18 + wave * 4, "weight": 2})
+			"title": s.label, "desc": s.desc, "cost": 18 + wave * 4, "weight": 2, "tier": 1})
 	for key in TowerData.TYPES:
 		var t: Dictionary = TowerData.TYPES[key]
 		pool.append({"id": "t_" + key, "kind": "tower", "key": key,
 			"title": "%s Tower" % t.label, "desc": "Deployed just ahead of you — must stand outside the walls",
-			"cost": int(t.cost), "weight": 2})
+			"cost": int(t.cost), "weight": 2, "tier": 2})
 	pool.append({"id": "reinforce", "kind": "reinforce", "key": "",
 		"title": "Reinforce Walls", "desc": "All wall segments +30% HP",
-		"cost": 50 + wave * 5, "weight": 2})
+		"cost": 50 + wave * 5, "weight": 2, "tier": 1})
 	if main.destroyed_wall_count() > 0:
 		pool.append({"id": "rebuild", "kind": "rebuild", "key": "",
 			"title": "Rebuild Walls", "desc": "Rebuild all destroyed segments",
-			"cost": 50 * int(main.destroyed_wall_count()), "weight": 3})
+			"cost": 50 * int(main.destroyed_wall_count()), "weight": 3, "tier": 2})
 	pool.append({"id": "overcharge", "kind": "overcharge", "key": "",
 		"title": "Tower Overcharge", "desc": "+30% damage to all towers",
-		"cost": 90 + wave * 5, "weight": 1})
+		"cost": 90 + wave * 5, "weight": 1, "tier": 3})
 
 	var cards: Array = []
 	while cards.size() < count and not pool.is_empty():

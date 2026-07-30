@@ -6,6 +6,14 @@ extends PanelContainer
 ## Buttons take no keyboard focus so Space/Enter can't misfire purchases.
 
 const REPAIR_COST := 40
+const CARD_W := 180.0
+
+const CARD_TEXTURES: Array = [
+	preload("res://assets/card_lv1.png"),
+	preload("res://assets/card_lv2.png"),
+	preload("res://assets/card_lv3.png"),
+	preload("res://assets/card_lv4.png"),
+]
 
 var main  # main.gd (untyped: it has no class_name)
 
@@ -28,9 +36,9 @@ func _ready() -> void:
 	anchor_right = 0.5
 	anchor_bottom = 0.5
 	offset_left = -262
-	offset_top = -280
+	offset_top = -372
 	offset_right = 262
-	offset_bottom = 280
+	offset_bottom = 372
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 8)
@@ -68,32 +76,36 @@ func _ready() -> void:
 		pick_row.add_child(b)
 		_pick_buttons.append(b)
 
+	# 2x2 hand of art cards; the whole card is the buy button. Card frame art
+	# comes from the tier templates (assets/card_lv1..4.png), text is overlaid
+	# with anchors matched to the template's banner / body / footer regions.
+	var tex0: Texture2D = CARD_TEXTURES[0]
+	var card_h := CARD_W * tex0.get_height() / tex0.get_width()
 	var grid := GridContainer.new()
 	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	vbox.add_child(grid)
 	for i in range(4):
-		var panel := PanelContainer.new()
-		panel.custom_minimum_size = Vector2(250, 108)
-		var vb := VBoxContainer.new()
-		vb.add_theme_constant_override("separation", 2)
-		panel.add_child(vb)
-		var t := Label.new()
-		t.add_theme_font_size_override("font_size", 15)
-		vb.add_child(t)
-		var d := Label.new()
-		d.add_theme_font_size_override("font_size", 12)
-		d.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
-		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		d.custom_minimum_size = Vector2(240, 34)
-		vb.add_child(d)
-		var buy := Button.new()
-		buy.focus_mode = Control.FOCUS_NONE
-		buy.pressed.connect(_on_buy.bind(i))
-		vb.add_child(buy)
-		grid.add_child(panel)
-		_card_widgets.append({"panel": panel, "title": t, "desc": d, "buy": buy})
+		var btn := Button.new()
+		btn.flat = true
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.custom_minimum_size = Vector2(CARD_W, card_h)
+		btn.pressed.connect(_on_buy.bind(i))
+		grid.add_child(btn)
+		var art := TextureRect.new()
+		art.stretch_mode = TextureRect.STRETCH_SCALE
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.set_anchors_preset(Control.PRESET_FULL_RECT)
+		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(art)
+		var t := _card_label(btn, 0.09, 0.035, 0.91, 0.135, 13)
+		var d := _card_label(btn, 0.12, 0.30, 0.88, 0.72, 12)
+		d.add_theme_color_override("font_color", Color(0.82, 0.84, 0.86))
+		var cost := _card_label(btn, 0.15, 0.76, 0.85, 0.92, 16)
+		cost.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35))
+		_card_widgets.append({"panel": btn, "art": art, "title": t, "desc": d, "cost": cost})
 
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 8)
@@ -112,6 +124,21 @@ func _ready() -> void:
 	start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	start.pressed.connect(func(): main.request_start_wave())
 	bottom.add_child(start)
+
+## Overlay label positioned by fractional anchors within a card's rect.
+func _card_label(parent: Control, ax0: float, ay0: float, ax1: float, ay1: float, font_size: int) -> Label:
+	var l := Label.new()
+	l.anchor_left = ax0
+	l.anchor_top = ay0
+	l.anchor_right = ax1
+	l.anchor_bottom = ay1
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_font_size_override("font_size", font_size)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(l)
+	return l
 
 func open() -> void:
 	visible = true
@@ -155,14 +182,16 @@ func refresh() -> void:
 			continue
 		wdg.panel.visible = true
 		var card: Dictionary = _cards[i]
-		wdg.title.text = card.title
+		wdg.art.texture = CARD_TEXTURES[clampi(int(card.get("tier", 1)), 1, 4) - 1]
+		wdg.title.text = String(card.title).to_upper()
 		wdg.desc.text = card.desc
 		if card.get("sold", false):
-			wdg.buy.text = "SOLD"
-			wdg.buy.disabled = true
+			wdg.cost.text = "SOLD"
+			wdg.panel.modulate = Color(0.45, 0.45, 0.45)
 		else:
-			wdg.buy.text = "Buy  —  $%d" % int(card.cost)
-			wdg.buy.disabled = int(card.cost) > Game.money
+			wdg.cost.text = "$%d" % int(card.cost)
+			# Dim cards the player can't afford (still clickable; spend() guards).
+			wdg.panel.modulate = Color.WHITE if int(card.cost) <= Game.money else Color(0.6, 0.58, 0.56)
 	_reroll_btn.text = "Reroll $%d" % _reroll_cost()
 	_reroll_btn.disabled = _reroll_cost() > Game.money
 	_repair_btn.text = "Repair walls $%d" % REPAIR_COST
