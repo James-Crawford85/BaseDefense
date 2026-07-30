@@ -1,0 +1,7 @@
+# Godot 4 cache/imported files
+.godot/
+
+# Exports
+export_presets.cfg
+*.pck
+*.zip
