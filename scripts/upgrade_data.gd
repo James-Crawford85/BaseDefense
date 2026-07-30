@@ -16,9 +16,13 @@ const FORTRESS: Array = [
 	{"id": "rebuild", "label": "Rebuild destroyed walls", "base_cost": 50, "kind": "rebuild"},
 ]
 
+## Towers are placed just above the player; cost/stats live in TowerData.
 const STRUCTURES: Array = [
-	{"id": "turret", "label": "Build turret (placed just above you)", "base_cost": 150, "kind": "flat"},
-	{"id": "turret_boost", "label": "Overcharge all turrets +30% dmg", "base_cost": 80, "kind": "scaling"},
+	{"id": "tower_gatling", "label": "Gatling tower — fast, weak shots", "kind": "tower", "tower": "gatling"},
+	{"id": "tower_standard", "label": "Guard tower — balanced", "kind": "tower", "tower": "standard"},
+	{"id": "tower_cannon", "label": "Cannon tower — slow AoE blasts", "kind": "tower", "tower": "cannon"},
+	{"id": "tower_flame", "label": "Flame tower — short-range cone", "kind": "tower", "tower": "flame"},
+	{"id": "turret_boost", "label": "Overcharge all towers +30% dmg", "base_cost": 80, "kind": "scaling"},
 ]
 
 static func cost_for(base_cost: int, level: int) -> int:

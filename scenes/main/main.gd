@@ -70,6 +70,22 @@ func _ready() -> void:
 	# Headless smoke testing: `godot --headless --quit-after N -- --smoke`
 	if "--smoke" in OS.get_cmdline_user_args():
 		begin_run.call_deferred()
+		_smoke_extras.call_deferred()
+
+## Spawns one of every tower and enemy type so a headless run exercises all
+## combat code paths (ranged enemies, AoE, flame cones), not just wave 1.
+func _smoke_extras() -> void:
+	var i := 0
+	for key in TowerData.TYPES:
+		place_turret_at(key, Vector2(90.0 + 130.0 * i, wall_y - 160.0))
+		i += 1
+	var j := 0
+	for key in EnemyData.TYPES:
+		var e := Enemy.new()
+		e.setup(key, wall_y, _gap_positions(), core)
+		e.position = Vector2(60.0 + 76.0 * j, -50.0)
+		entity_layer.add_child(e)
+		j += 1
 
 func _build_camera() -> void:
 	var cam := Camera2D.new()
@@ -235,8 +251,12 @@ func can_place_turret() -> bool:
 	var pos := turret_spot()
 	return pos.y < wall_y - 60.0 and pos.y > 70.0 and pos.x > 40.0 and pos.x < arena_w - 40.0
 
-func place_turret() -> void:
+func place_turret(type_key: String) -> void:
+	place_turret_at(type_key, turret_spot())
+
+func place_turret_at(type_key: String, pos: Vector2) -> void:
 	var t := Turret.new()
-	t.position = turret_spot()
+	t.setup(type_key)
+	t.position = pos
 	entity_layer.add_child(t)
-	Fx.float_text(t.position, "Turret online", Color(0.5, 0.9, 1.0))
+	Fx.float_text(pos, "%s tower online" % TowerData.TYPES[type_key].label, Color(0.5, 0.9, 1.0))

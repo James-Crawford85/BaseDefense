@@ -77,6 +77,8 @@ func _cost(item: Dictionary) -> int:
 			return item.base_cost * int(main.destroyed_wall_count())
 		"flat":
 			return item.base_cost
+		"tower":
+			return TowerData.TYPES[item.tower].cost
 		_:
 			return UpgradeData.cost_for(item.base_cost, _levels.get(item.id, 0))
 
@@ -99,19 +101,22 @@ func refresh() -> void:
 
 func _try_buy(item: Dictionary) -> void:
 	var cost := _cost(item)
-	if item.id == "turret" and not main.can_place_turret():
+	if item.kind == "tower" and not main.can_place_turret():
 		Fx.float_text(main.player.global_position, "Stand outside the walls!", Color(1, 0.5, 0.4))
 		return
 	if not Game.spend(cost):
 		return
-	_apply(item.id)
+	_apply(item)
 	if item.kind == "scaling":
 		_levels[item.id] = _levels.get(item.id, 0) + 1
 	refresh()
 
-func _apply(id: String) -> void:
+func _apply(item: Dictionary) -> void:
+	if item.kind == "tower":
+		main.place_turret(item.tower)
+		return
 	var p: Player = main.player
-	match id:
+	match item.id:
 		"damage":
 			p.damage *= 1.25
 		"fire_rate":
@@ -129,7 +134,5 @@ func _apply(id: String) -> void:
 			main.reinforce_walls()
 		"rebuild":
 			main.rebuild_walls()
-		"turret":
-			main.place_turret()
 		"turret_boost":
 			Turret.damage_mult *= 1.3

@@ -1,8 +1,9 @@
 class_name Enemy
 extends CharacterBody2D
-## One script for all enemy types — behavior differences come from EnemyData.
-## Marches down its lane (runners aim for wall gaps), attacks whatever damageable
-## thing it bumps into (wall, turret, core, player), then pushes on toward the core.
+## One script for all enemy types — differences come from EnemyData's stat
+## triangle. Melee types march down their lane (gap-seekers aim for wall gaps)
+## and attack whatever damageable thing they bump into. Ranged types stop at
+## attack_range and shell the nearest target (wall, tower, core, or player).
 
 var stats: Dictionary
 var hp: float
@@ -20,7 +21,7 @@ var _bar: HealthBar
 
 func setup(type: String, wall_line_y: float, gap_xs: Array, core: Node2D) -> void:
 	type_key = type
-	stats = EnemyData.TYPES[type]
+	stats = EnemyData.stats_for(type)
 	hp = stats.hp
 	max_hp = stats.hp
 	_wall_line_y = wall_line_y
@@ -46,23 +47,47 @@ func _ready() -> void:
 	add_child(shape)
 
 	var poly := Polygon2D.new()
-	var s: float = stats.body_size / 2.0
-	if stats.shape == "triangle":
-		poly.polygon = PackedVector2Array([Vector2(0, s), Vector2(-s, -s), Vector2(s, -s)])
-	else:
-		poly.polygon = PackedVector2Array([Vector2(-s, -s), Vector2(s, -s), Vector2(s, s), Vector2(-s, s)])
+	poly.polygon = _shape_points()
 	poly.color = stats.color
 	add_child(poly)
 
 	_bar = HealthBar.new()
 	_bar.width = stats.body_size
-	_bar.position = Vector2(0, -s - 8.0)
+	_bar.position = Vector2(0, -stats.body_size / 2.0 - 8.0)
 	add_child(_bar)
+
+func _shape_points() -> PackedVector2Array:
+	var s: float = stats.body_size / 2.0
+	match stats.shape:
+		"triangle":
+			return PackedVector2Array([Vector2(0, s), Vector2(-s, -s), Vector2(s, -s)])
+		"dart":
+			return PackedVector2Array([Vector2(0, s), Vector2(-s * 0.5, -s), Vector2(s * 0.5, -s)])
+		"diamond":
+			return PackedVector2Array([Vector2(0, -s), Vector2(s, 0), Vector2(0, s), Vector2(-s, 0)])
+		"pentagon":
+			var pts := PackedVector2Array()
+			for i in range(5):
+				var a := -PI / 2.0 + TAU * i / 5.0
+				pts.append(Vector2(cos(a), sin(a)) * s)
+			return pts
+		_:
+			return PackedVector2Array([Vector2(-s, -s), Vector2(s, -s), Vector2(s, s), Vector2(-s, s)])
 
 func _physics_process(delta: float) -> void:
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
 	if _attack_target != null and not is_instance_valid(_attack_target):
 		_attack_target = null
+
+	# Ranged: hold position and shoot as soon as anything is in range.
+	if stats.attack_range > 0.0:
+		var victim := _nearest_victim()
+		if victim != null:
+			velocity = Vector2.ZERO
+			if _cooldown_left <= 0.0:
+				_fire_at(victim)
+				_cooldown_left = stats.attack_cooldown
+			return
 
 	velocity = (_current_goal() - global_position).normalized() * stats.speed
 	move_and_slide()
@@ -96,6 +121,31 @@ func _current_goal() -> Vector2:
 	if _core != null and is_instance_valid(_core):
 		return _core.global_position
 	return global_position + Vector2.DOWN * 100.0
+
+func _nearest_victim() -> Node2D:
+	var best: Node2D = null
+	var best_d: float = stats.attack_range * stats.attack_range
+	for group in ["players", "walls", "structures"]:
+		for n in get_tree().get_nodes_in_group(group):
+			var node := n as Node2D
+			if node == null:
+				continue
+			if node is Player and node.hp <= 0.0:
+				continue
+			if node is WallSegment and node.destroyed:
+				continue
+			var d := node.global_position.distance_squared_to(global_position)
+			if d < best_d:
+				best_d = d
+				best = node
+	return best
+
+func _fire_at(victim: Node2D) -> void:
+	var p := Projectile.new()
+	p.setup(victim.global_position - global_position, stats.damage,
+		stats.attack_range + 140.0, stats.color, true, 0.0, 260.0)
+	p.position = global_position
+	get_parent().add_child(p)
 
 func take_damage(amount: float) -> void:
 	if hp <= 0.0:

@@ -26,6 +26,27 @@ func flash(item: CanvasItem) -> void:
 	var t := item.create_tween()
 	t.tween_property(item, "modulate", Color.WHITE, 0.15)
 
+func boom(pos: Vector2, radius: float, color: Color) -> void:
+	if world == null or not is_instance_valid(world):
+		return
+	var n := Polygon2D.new()
+	var pts := PackedVector2Array()
+	for i in range(20):
+		var a := TAU * i / 20.0
+		pts.append(Vector2(cos(a), sin(a)) * radius)
+	n.polygon = pts
+	n.color = Color(color.r, color.g, color.b, 0.45)
+	n.position = pos
+	n.scale = Vector2(0.4, 0.4)
+	n.z_index = 50
+	world.add_child(n)
+	shake(3.0)
+	var t := n.create_tween()
+	t.set_parallel(true)
+	t.tween_property(n, "scale", Vector2.ONE, 0.22)
+	t.tween_property(n, "modulate:a", 0.0, 0.3)
+	t.chain().tween_callback(n.queue_free)
+
 func float_text(pos: Vector2, text: String, color: Color = Color.WHITE) -> void:
 	if world == null or not is_instance_valid(world):
 		return
