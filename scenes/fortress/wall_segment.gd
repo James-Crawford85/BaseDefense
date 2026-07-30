@@ -23,14 +23,35 @@ func _ready() -> void:
 	_shape.shape = rect
 	add_child(_shape)
 	_poly = Polygon2D.new()
-	var h := seg_size / 2.0
-	_poly.polygon = PackedVector2Array([Vector2(-h.x, -h.y), Vector2(h.x, -h.y), Vector2(h.x, h.y), Vector2(-h.x, h.y)])
+	_poly.polygon = _crenellated_outline()
 	add_child(_poly)
 	_bar = HealthBar.new()
 	_bar.width = seg_size.x - 12.0
 	_bar.position = Vector2(0, -seg_size.y / 2.0 - 10.0)
 	add_child(_bar)
 	_update_visual()
+
+## Rectangle with three merlon teeth on top, so segments read as fortification
+## on their own now that the background art has none baked in.
+func _crenellated_outline() -> PackedVector2Array:
+	var hw := seg_size.x / 2.0
+	var hh := seg_size.y / 2.0
+	var th := 8.0  # tooth height
+	var sw := seg_size.x / 5.0  # 5 sections: tooth, gap, tooth, gap, tooth
+	var pts := PackedVector2Array()
+	pts.append(Vector2(-hw, hh))
+	pts.append(Vector2(-hw, -hh + th))
+	for i in range(5):
+		var x0 := -hw + i * sw
+		var x1 := x0 + sw
+		if i % 2 == 0:
+			pts.append(Vector2(x0, -hh + th))
+			pts.append(Vector2(x0, -hh))
+			pts.append(Vector2(x1, -hh))
+			pts.append(Vector2(x1, -hh + th))
+	pts.append(Vector2(hw, -hh + th))
+	pts.append(Vector2(hw, hh))
+	return pts
 
 func take_damage(amount: float) -> void:
 	if destroyed:

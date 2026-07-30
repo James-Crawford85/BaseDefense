@@ -91,11 +91,17 @@ func _build_camera() -> void:
 	Fx.camera = cam
 
 func _build_background() -> void:
+	# Plain terrain art (no fortification baked in) stretched to the viewport —
+	# the fortress itself is drawn by WallSegment/FortressCore.
 	var sprite := Sprite2D.new()
-	sprite.texture = load("res://assets/background.png")
+	var tex: Texture2D = load("res://assets/Desert_sand.jpeg")
+	sprite.texture = tex
 	sprite.centered = false
+	sprite.scale = Vector2(arena_w / tex.get_width(), arena_h / tex.get_height())
 	sprite.z_index = -10
 	add_child(sprite)
+	# Darkened courtyard so inside-the-walls still reads against open ground.
+	_add_bg_rect(Rect2(0, wall_y + 18, arena_w, arena_h - wall_y - 18), Color(0.12, 0.1, 0.08, 0.3))
 	# Faint red tint marking the enemy spawn strip.
 	_add_bg_rect(Rect2(0, 0, arena_w, 40), Color(0.3, 0.1, 0.1, 0.25))
 
