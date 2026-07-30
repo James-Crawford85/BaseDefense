@@ -35,10 +35,10 @@ func _ready() -> void:
 	anchor_top = 0.5
 	anchor_right = 0.5
 	anchor_bottom = 0.5
-	offset_left = -262
-	offset_top = -372
-	offset_right = 262
-	offset_bottom = 372
+	offset_left = -400
+	offset_top = -252
+	offset_right = 400
+	offset_bottom = 252
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 8)
@@ -76,13 +76,13 @@ func _ready() -> void:
 		pick_row.add_child(b)
 		_pick_buttons.append(b)
 
-	# 2x2 hand of art cards; the whole card is the buy button. Card frame art
-	# comes from the tier templates (assets/card_lv1..4.png), text is overlaid
-	# with anchors matched to the template's banner / body / footer regions.
+	# One-row hand of art cards; the whole card is the buy button. Card frame
+	# art comes from the tier templates (assets/card_lv1..4.png), text is
+	# overlaid with anchors matched to the template's banner / body / footer.
 	var tex0: Texture2D = CARD_TEXTURES[0]
 	var card_h := CARD_W * tex0.get_height() / tex0.get_width()
 	var grid := GridContainer.new()
-	grid.columns = 2
+	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
 	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER

@@ -17,8 +17,8 @@ Fx="*res://scripts/fx.gd"
 
 [display]
 
-window/size/viewport_width=573
-window/size/viewport_height=1020
+window/size/viewport_width=1020
+window/size/viewport_height=573
 window/size/mode=3
 window/stretch/mode="canvas_items"
 window/stretch/aspect="keep"

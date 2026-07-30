@@ -5,11 +5,12 @@ extends Node
 signal wave_cleared(wave_index: int)
 
 var arena: Node2D
-var wall_line_y: float = 0.0
-var gap_xs: Array = []
+var wall_line_x: float = 0.0
+var gap_ys: Array = []
 var core: Node2D
-var spawn_x_min: float = 70.0
-var spawn_x_max: float = 1210.0
+var spawn_edge_x: float = 1020.0
+var spawn_y_min: float = 40.0
+var spawn_y_max: float = 530.0
 
 var _schedule: Array = []
 var _elapsed: float = 0.0
@@ -47,6 +48,6 @@ func _process(delta: float) -> void:
 
 func _spawn(type: String) -> void:
 	var enemy := Enemy.new()
-	enemy.setup(type, wall_line_y, gap_xs, core, _wave_index + 1)
-	enemy.position = Vector2(randf_range(spawn_x_min, spawn_x_max), randf_range(-80.0, -40.0))
+	enemy.setup(type, wall_line_x, gap_ys, core, _wave_index + 1)
+	enemy.position = Vector2(spawn_edge_x + randf_range(40.0, 80.0), randf_range(spawn_y_min, spawn_y_max))
 	arena.add_child(enemy)

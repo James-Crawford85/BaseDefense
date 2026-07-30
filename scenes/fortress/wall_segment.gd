@@ -3,7 +3,7 @@ extends StaticBody2D
 ## One segment of the fortress wall. Darkens as it takes damage; when destroyed
 ## it becomes a passable ruin (node kept alive so the shop can rebuild it).
 
-var seg_size := Vector2(96, 40)  # set by main before add_child to fit the wall slots
+var seg_size := Vector2(40, 96)  # set by main before add_child to fit the wall slots
 
 var max_hp: float = 120.0
 var hp: float = 120.0
@@ -26,31 +26,32 @@ func _ready() -> void:
 	_poly.polygon = _crenellated_outline()
 	add_child(_poly)
 	_bar = HealthBar.new()
-	_bar.width = seg_size.x - 12.0
-	_bar.position = Vector2(0, -seg_size.y / 2.0 - 10.0)
+	_bar.width = seg_size.x - 6.0
+	_bar.position = Vector2(0, -seg_size.y / 2.0 - 8.0)
 	add_child(_bar)
 	_update_visual()
 
-## Rectangle with three merlon teeth on top, so segments read as fortification
-## on their own now that the background art has none baked in.
+## Rectangle with three merlon teeth on the RIGHT edge (facing the enemy
+## approach), so segments read as fortification on their own now that the
+## background art has none baked in.
 func _crenellated_outline() -> PackedVector2Array:
 	var hw := seg_size.x / 2.0
 	var hh := seg_size.y / 2.0
 	var th := 8.0  # tooth height
-	var sw := seg_size.x / 5.0  # 5 sections: tooth, gap, tooth, gap, tooth
+	var sh := seg_size.y / 5.0  # 5 sections: tooth, gap, tooth, gap, tooth
 	var pts := PackedVector2Array()
-	pts.append(Vector2(-hw, hh))
-	pts.append(Vector2(-hw, -hh + th))
+	pts.append(Vector2(-hw, -hh))
+	pts.append(Vector2(hw - th, -hh))
 	for i in range(5):
-		var x0 := -hw + i * sw
-		var x1 := x0 + sw
+		var y0 := -hh + i * sh
+		var y1 := y0 + sh
 		if i % 2 == 0:
-			pts.append(Vector2(x0, -hh + th))
-			pts.append(Vector2(x0, -hh))
-			pts.append(Vector2(x1, -hh))
-			pts.append(Vector2(x1, -hh + th))
-	pts.append(Vector2(hw, -hh + th))
-	pts.append(Vector2(hw, hh))
+			pts.append(Vector2(hw - th, y0))
+			pts.append(Vector2(hw, y0))
+			pts.append(Vector2(hw, y1))
+			pts.append(Vector2(hw - th, y1))
+	pts.append(Vector2(hw - th, hh))
+	pts.append(Vector2(-hw, hh))
 	return pts
 
 func take_damage(amount: float) -> void:

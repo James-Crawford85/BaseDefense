@@ -103,15 +103,15 @@ func _build_shop() -> void:
 
 func _build_menu() -> void:
 	_menu_overlay = _overlay()
-	_centered_label(_menu_overlay, "BASE DEFENSE", _h * 0.07, 44)
-	_centered_label(_menu_overlay, "Choose your tank", _h * 0.145, 20, Color(0.85, 0.85, 0.9))
+	_centered_label(_menu_overlay, "BASE DEFENSE", _h * 0.04, 44)
+	_centered_label(_menu_overlay, "Choose your tank", _h * 0.115, 20, Color(0.85, 0.85, 0.9))
 	var panel_w := 172.0
 	var gap := 8.0
 	var x0 := (_w - (panel_w * 3 + gap * 2)) / 2.0
 	for i in range(CLASS_ORDER.size()):
 		var data: Dictionary = TankData.CLASSES[CLASS_ORDER[i]]
 		var panel := PanelContainer.new()
-		panel.position = Vector2(x0 + i * (panel_w + gap), _h * 0.21)
+		panel.position = Vector2(x0 + i * (panel_w + gap), _h * 0.17)
 		panel.custom_minimum_size = Vector2(panel_w, 220)
 		var vb := VBoxContainer.new()
 		vb.add_theme_constant_override("separation", 4)
@@ -139,10 +139,10 @@ func _build_menu() -> void:
 		_menu_overlay.add_child(panel)
 		_class_panels.append(panel)
 	_select_class(0)
-	_centered_label(_menu_overlay, "◄ ► to choose — Enter / Start to roll out", _h * 0.52, 20, Color(1.0, 0.9, 0.4))
+	_centered_label(_menu_overlay, "◄ ► to choose — Enter / Start to roll out", _h * 0.62, 20, Color(1.0, 0.9, 0.4))
 	var controls := _centered_label(_menu_overlay,
 		"WASD / left stick — drive (the hull turns toward your heading)\nSpace — boost · Main turret fires 360°, side mounts only cover\ntheir half — face the fight! Kills drop gold and XP orbs:\ndrive over them to collect. Spend both between waves.",
-		_h * 0.6, 14, Color(0.7, 0.7, 0.75))
+		_h * 0.72, 14, Color(0.7, 0.7, 0.75))
 	controls.size.y = 140
 
 func _on_class_panel_input(event: InputEvent, idx: int) -> void:
