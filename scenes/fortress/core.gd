@@ -39,6 +39,7 @@ func take_damage(amount: float) -> void:
 	hp -= amount
 	Fx.flash(self)
 	Fx.shake(3.0)
+	Sfx.play("core_hit")
 	_bar.set_health(hp, max_hp)
 	if hp <= 0.0:
 		hp = 0.0

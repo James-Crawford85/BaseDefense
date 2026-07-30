@@ -6,6 +6,8 @@ extends StaticBody2D
 
 static var damage_mult: float = 1.0
 
+const SHOT_SFX := {"gatling": "shot_mg", "standard": "shot_auto", "cannon": "shot_cannon"}
+
 var type_key := "standard"
 var stats: Dictionary
 var max_hp: float
@@ -96,6 +98,7 @@ func _shoot_tick(target: Node2D) -> void:
 	p.position = global_position + dir * stats.body_size * 0.5
 	get_parent().add_child(p)
 	_cooldown = 1.0 / stats.fire_rate
+	Sfx.play(SHOT_SFX.get(type_key, "shot_auto"))
 
 func _flame_tick(target: Node2D) -> void:
 	if target == null:
@@ -107,6 +110,7 @@ func _flame_tick(target: Node2D) -> void:
 	if _cooldown > 0.0:
 		return
 	_cooldown = 1.0 / stats.fire_rate
+	Sfx.play("flame")
 	var half := deg_to_rad(stats.cone_degrees) / 2.0
 	for e in get_tree().get_nodes_in_group("enemies"):
 		var n := e as Enemy
@@ -123,4 +127,5 @@ func take_damage(amount: float) -> void:
 	if hp <= 0.0:
 		Fx.float_text(global_position, "%s tower destroyed!" % stats.label, Color(1, 0.4, 0.3))
 		Fx.shake(5.0)
+		Sfx.play("explode_small")
 		queue_free()

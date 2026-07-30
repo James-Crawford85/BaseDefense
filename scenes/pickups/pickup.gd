@@ -52,6 +52,8 @@ func _find_player() -> Player:
 func _collect() -> void:
 	if kind == "gold":
 		Game.add_money(value)
+		Sfx.play("pickup_gold")
 	else:
 		Game.add_xp(value)
+		Sfx.play("pickup_xp")
 	queue_free()

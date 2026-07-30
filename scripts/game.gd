@@ -40,10 +40,14 @@ func xp_needed() -> int:
 
 func add_xp(amount: int) -> void:
 	xp += amount
+	var leveled := false
 	while xp >= xp_needed():
 		xp -= xp_needed()
 		level += 1
 		pending_picks += 1
+		leveled = true
+	if leveled:
+		Sfx.play("level_up", 0.0)
 
 func register_kill() -> void:
 	kills += 1

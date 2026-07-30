@@ -158,6 +158,7 @@ func _fire_at(victim: Node2D) -> void:
 		stats.attack_range + 140.0, stats.color, true, 0.0, 260.0)
 	p.position = global_position
 	get_parent().add_child(p)
+	Sfx.play("shot_artillery")
 
 func take_damage(amount: float) -> void:
 	if hp <= 0.0:
@@ -170,6 +171,7 @@ func take_damage(amount: float) -> void:
 
 func die() -> void:
 	Game.register_kill()
+	Sfx.play("explode_big" if stats.body_size >= 34.0 else "explode_small")
 	var gold := Pickup.new()
 	gold.kind = "gold"
 	gold.value = stats.money

@@ -5,6 +5,8 @@ extends Node2D
 ## clamps at its arc limits, so arcs read visually. The gun's look encodes the
 ## weapon (barrel shape/count) and its level (tier band color, barrel length).
 
+const SHOT_SFX := {"machinegun": "shot_mg", "autocannon": "shot_auto", "cannon": "shot_cannon"}
+
 var tank: Player
 var arc_center := 0.0   # hull-local radians
 var arc_half := PI      # PI = full 360
@@ -104,6 +106,7 @@ func _physics_process(delta: float) -> void:
 		p.position = global_position + dir * 14.0
 		tank.get_parent().add_child(p)
 		_cooldown = 1.0 / (_stats.fire_rate * tank.fire_rate_mult)
+		Sfx.play(SHOT_SFX.get(weapon_key, "shot_auto"))
 
 func _flame_tick(target: Node2D, range_eff: float) -> void:
 	if _cone == null:
@@ -116,6 +119,7 @@ func _flame_tick(target: Node2D, range_eff: float) -> void:
 	if _cooldown > 0.0:
 		return
 	_cooldown = 1.0 / (_stats.fire_rate * tank.fire_rate_mult)
+	Sfx.play("flame")
 	var aim := tank.global_rotation + _gun.rotation - PI / 2.0
 	var aim_dir := Vector2.from_angle(aim)
 	var half := deg_to_rad(_stats.cone_degrees) / 2.0

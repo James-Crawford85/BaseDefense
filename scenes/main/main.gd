@@ -190,6 +190,7 @@ func _start_wave(index: int) -> void:
 	hud.close_shop()
 	hud.set_wave_label(index + 1, FINAL_WAVE)
 	hud.show_message("WAVE %d INCOMING" % (index + 1), 1.8)
+	Sfx.play("wave_start", 0.0)
 	get_tree().create_timer(2.0).timeout.connect(func():
 		if state == State.WAVE:
 			wave_manager.start_wave(index))
@@ -224,6 +225,7 @@ func _end_run(victory: bool) -> void:
 		return
 	state = State.VICTORY if victory else State.GAME_OVER
 	wave_manager.stop()
+	Sfx.play("victory" if victory else "defeat", 0.0)
 	hud.show_results(victory)
 	get_tree().paused = true
 

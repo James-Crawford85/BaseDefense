@@ -92,6 +92,7 @@ func _physics_process(delta: float) -> void:
 		_dash_time = 0.15
 		_dash_cooldown = 1.0
 		_invuln = maxf(_invuln, 0.25)
+		Sfx.play("dash")
 	var speed := move_speed * (2.4 if _dash_time > 0.0 else 1.0)
 	velocity = input_dir * speed
 	move_and_slide()
@@ -151,6 +152,7 @@ func take_damage(amount: float) -> void:
 	_invuln = 0.6
 	Fx.flash(self)
 	Fx.shake(4.0)
+	Sfx.play("player_hit")
 	if hp <= 0.0:
 		hp = 0.0
 		hide()

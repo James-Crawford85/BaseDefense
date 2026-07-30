@@ -170,6 +170,7 @@ func _refresh_picks() -> void:
 func _on_pick(i: int) -> void:
 	if Game.pending_picks <= 0:
 		return
+	Sfx.play("buy", 0.0)
 	main.player.apply_stat(_pick_ids[i])
 	Game.pending_picks -= 1
 	_refresh_picks()
@@ -203,9 +204,12 @@ func _on_buy(i: int) -> void:
 		return
 	if card.kind == "tower" and not main.can_place_turret():
 		Fx.float_text(main.player.global_position, "Stand outside the walls!", Color(1, 0.5, 0.4))
+		Sfx.play("deny", 0.0)
 		return
 	if not Game.spend(int(card.cost)):
+		Sfx.play("deny", 0.0)
 		return
+	Sfx.play("buy", 0.0)
 	match card.kind:
 		"weapon":
 			main.player.buy_weapon(card.key)
@@ -224,7 +228,9 @@ func _on_buy(i: int) -> void:
 
 func _on_reroll() -> void:
 	if not Game.spend(_reroll_cost()):
+		Sfx.play("deny", 0.0)
 		return
+	Sfx.play("reroll", 0.0)
 	_rerolls += 1
 	_roll_cards()
 	refresh()
@@ -233,6 +239,8 @@ func _on_repair() -> void:
 	if not main.repairable_walls():
 		return
 	if not Game.spend(REPAIR_COST):
+		Sfx.play("deny", 0.0)
 		return
+	Sfx.play("buy", 0.0)
 	main.repair_walls()
 	refresh()

@@ -59,6 +59,7 @@ func take_damage(amount: float) -> void:
 		return
 	hp -= amount
 	Fx.flash(self)
+	Sfx.play("wall_hit")
 	_update_visual()
 	if hp <= 0.0:
 		_destroy()
@@ -79,6 +80,8 @@ func _destroy() -> void:
 	_update_visual()
 	Fx.shake(8.0)
 	Fx.float_text(global_position, "WALL BREACHED!", Color(1, 0.4, 0.3))
+	Sfx.play("explode_small")
+	Sfx.play("wall_breach", 0.0)
 
 func rebuild() -> void:
 	destroyed = false
