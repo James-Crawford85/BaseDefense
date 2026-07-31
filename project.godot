@@ -11,6 +11,7 @@ config_version=5
 [application]
 
 config/name="BaseDefense"
+config/version="0.1.0"
 run/main_scene="res://scenes/main/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
@@ -20,6 +21,7 @@ Game="*res://scripts/game.gd"
 Fx="*res://scripts/fx.gd"
 Sfx="*res://scripts/sfx.gd"
 Net="*res://scripts/net.gd"
+Updater="*res://scripts/updater.gd"
 
 [display]
 

@@ -19,6 +19,9 @@ var _lobby_screen: Control
 var _join_screen: Control
 var _error_label: Label
 var _steam_label: Label
+var _update_btn: Button
+var _version_label: Label
+var _updating := false
 
 # Lobby widgets
 var _lobby_title: Label
@@ -48,6 +51,12 @@ func _ready() -> void:
 	Net.lobby_list_ready.connect(_on_lobby_list)
 	Net.session_error.connect(_on_session_error)
 	Net.game_starting.connect(func(): close())
+	Updater.update_available.connect(_on_update_available)
+	Updater.download_progress.connect(_on_update_progress)
+	Updater.update_failed.connect(_on_update_failed)
+	# Skip the network check in headless smoke/automation.
+	if DisplayServer.get_name() != "headless":
+		Updater.check_for_updates()
 	if Net.active() and Net.return_to_lobby:
 		Net.return_to_lobby = false
 		_solo = false
@@ -147,12 +156,47 @@ func _build_title() -> void:
 	_btn(col, "JOIN GAME", size).pressed.connect(_on_join_pressed)
 	_btn(col, "QUIT", size).pressed.connect(func(): get_tree().quit())
 
+	# Update notification — hidden until check_for_updates finds a newer release.
+	_update_btn = _btn(_title_screen, "", Vector2(400, 40), true)
+	_update_btn.position = Vector2(_w / 2.0 - 200, _h * 0.68)
+	_update_btn.visible = false
+	_update_btn.pressed.connect(_on_update_pressed)
+
 	_error_label = _centered(_title_screen, "", _h * 0.80, 15, Color(0.95, 0.45, 0.4))
 	_steam_label = _centered(_title_screen, "", _h * 0.90, 13, TEXT_DIM)
 	if Net.steam_ok:
 		_steam_label.text = "Steam: online as %s — lobbies enabled" % Net.steam_name
 	else:
 		_steam_label.text = "Steam not detected — hosting/joining runs over LAN (direct IP)"
+
+	_version_label = _label(_title_screen, "v" + Updater.current_version, 12, TEXT_DIM)
+	_version_label.position = Vector2(12, _h - 26)
+
+func _on_update_available(version: String, _notes: String) -> void:
+	if _update_btn == null:
+		return
+	_update_btn.text = "⬆  Update available: v%s  —  click to install" % version
+	_update_btn.visible = true
+
+func _on_update_pressed() -> void:
+	if _updating:
+		return
+	_updating = true
+	_update_btn.disabled = true
+	_update_btn.text = "Downloading update…"
+	Updater.download_and_apply()
+
+func _on_update_progress(fraction: float) -> void:
+	if _update_btn != null and _updating:
+		_update_btn.text = "Downloading update…  %d%%" % int(fraction * 100.0)
+
+func _on_update_failed(message: String) -> void:
+	_updating = false
+	if _update_btn != null:
+		_update_btn.disabled = false
+		_update_btn.text = "⬆  Update failed — click to retry"
+	if _error_label != null:
+		_error_label.text = message
 
 func _on_solo_pressed() -> void:
 	_solo = true
