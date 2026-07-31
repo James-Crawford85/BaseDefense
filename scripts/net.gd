@@ -133,24 +133,29 @@ func _reset_roster_as_host() -> void:
 	started = false
 	lobby_updated.emit()
 
+## Two steps: first actually join the Steam lobby, THEN (in the lobby_joined
+## callback) open the peer connection to the host. connect_to_lobby needs us to
+## already be a lobby member so it can read the owner's SteamID — calling it
+## before joining fails with ERR_CANT_CREATE (error 20).
 func join_steam_lobby(id: int) -> void:
 	mode = Mode.CLIENT
 	transport = "steam"
-	var peer := SteamMultiplayerPeer.new()
-	var err: int = peer.connect_to_lobby(id)
-	if err != OK:
-		_fail("Couldn't join that lobby (error %d)." % err)
-		return
 	lobby_id = id
-	multiplayer.multiplayer_peer = peer
+	Steam.joinLobby(id)
 
 func _on_steam_lobby_joined(joined_lobby: int, _perms: int, _locked: bool, response: int) -> void:
 	if mode != Mode.CLIENT:
 		return
-	if response != 1:  # 1 = success
+	if response != 1:  # 1 = k_EChatRoomEnterResponseSuccess
 		_fail("Lobby join refused (code %d)." % response)
 		return
 	lobby_id = joined_lobby
+	var peer := SteamMultiplayerPeer.new()
+	var err: int = peer.connect_to_lobby(joined_lobby)
+	if err != OK:
+		_fail("Couldn't connect to the host (error %d)." % err)
+		return
+	multiplayer.multiplayer_peer = peer
 
 func join_enet(ip: String) -> void:
 	mode = Mode.CLIENT
