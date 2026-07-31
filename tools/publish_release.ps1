@@ -63,6 +63,7 @@ $buildDir = Join-Path $repo "build\windows"
 New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
 Get-ChildItem $buildDir -File | Remove-Item -Force -ErrorAction SilentlyContinue
 & $Godot --headless --path $repo --export-release "Windows Desktop" (Join-Path $buildDir "BaseDefense.exe")
+Assert-LastExit "godot export"
 if (-not (Test-Path (Join-Path $buildDir "BaseDefense.exe"))) { throw "Export failed: no exe produced." }
 Write-Host "Exported build"
 
