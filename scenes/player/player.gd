@@ -1,10 +1,10 @@
 class_name Player
 extends CharacterBody2D
 ## The player tank. Class chassis (TankData) sets base stats and weapon slot
-## layout; WeaponMount children do all the shooting. The hull rotates toward
-## the movement direction — since side mounts cover hull-relative 180° arcs,
-## driving direction IS weapon aiming. Still co-op-ready: one self-contained
-## scene per player.
+## layout; WeaponMount children do all the shooting. Tank steering: left/right
+## pivot the hull on its center axis and up/down drive along its facing — since
+## side mounts cover hull-relative 180° arcs, where you point the tank IS weapon
+## aiming. Still co-op-ready: one self-contained scene per player.
 
 signal died
 
@@ -21,6 +21,7 @@ var _dead_visual := false
 var max_hp := 100.0
 var hp := 100.0
 var move_speed := 240.0
+var turn_speed := 2.8    # hull rotation rate in rad/s (tank-style steering)
 var damage_mult := 1.0
 var fire_rate_mult := 1.0
 var range_mult := 1.0
@@ -111,17 +112,23 @@ func _physics_process(delta: float) -> void:
 		rotation = lerp_angle(rotation, _net_rot, 12.0 * delta)
 		return
 
-	var input_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0.0 and input_dir != Vector2.ZERO:
+	# Tank controls: left/right pivot the hull on its center axis (even while
+	# stationary), up/down drive along the way it's pointing. Reverse is slower,
+	# like a real tank. Hull facing doubles as weapon aim, so steering aims too.
+	var turn_input := Input.get_axis("move_left", "move_right")
+	var drive_input := Input.get_axis("move_up", "move_down")  # up = -1, down = +1
+	rotation += turn_input * turn_speed * delta
+	var throttle := -drive_input  # forward is positive
+	if throttle < 0.0:
+		throttle *= 0.6           # reverse at 60% speed
+	if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0.0 and throttle != 0.0:
 		_dash_time = 0.15
 		_dash_cooldown = 1.0
 		_invuln = maxf(_invuln, 0.25)
 		Sfx.play("dash")
 	var speed := move_speed * (2.4 if _dash_time > 0.0 else 1.0)
-	velocity = input_dir * speed
+	velocity = Vector2.UP.rotated(rotation) * throttle * speed
 	move_and_slide()
-	if input_dir != Vector2.ZERO:
-		rotation = lerp_angle(rotation, input_dir.angle() + PI / 2.0, 8.0 * delta)
 
 	if Net.active():
 		_send_accum += delta
