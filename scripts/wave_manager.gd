@@ -23,7 +23,8 @@ func start_wave(index: int) -> void:
 	_schedule.clear()
 	for group in WaveData.schedule(index):
 		for i in range(group.count):
-			_schedule.append({"time": group.delay + i * group.interval, "type": group.type})
+			_schedule.append({"time": group.delay + i * group.interval,
+				"type": group.type, "boss": group.get("boss", false)})
 	_schedule.sort_custom(func(a, b): return a.time < b.time)
 	_elapsed = 0.0
 	_spawning = true
@@ -39,15 +40,16 @@ func _process(delta: float) -> void:
 	if _spawning:
 		_elapsed += delta
 		while not _schedule.is_empty() and _schedule[0].time <= _elapsed:
-			_spawn(_schedule.pop_front().type)
+			var entry: Dictionary = _schedule.pop_front()
+			_spawn(entry.type, entry.boss)
 		if _schedule.is_empty():
 			_spawning = false
 	elif get_tree().get_nodes_in_group("enemies").is_empty():
 		_active = false
 		wave_cleared.emit(_wave_index)
 
-func _spawn(type: String) -> void:
+func _spawn(type: String, boss: bool = false) -> void:
 	var enemy := Enemy.new()
-	enemy.setup(type, wall_line_x, gap_ys, core, _wave_index + 1)
+	enemy.setup(type, wall_line_x, gap_ys, core, _wave_index + 1, boss)
 	enemy.position = Vector2(spawn_edge_x + randf_range(40.0, 80.0), randf_range(spawn_y_min, spawn_y_max))
 	arena.add_child(enemy)

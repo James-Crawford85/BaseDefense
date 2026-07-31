@@ -35,9 +35,9 @@ var _lost_contact: float = 0.0
 var _bar: HealthBar
 var _visual: Node2D
 
-func setup(type: String, wall_line_x: float, gap_ys: Array, core: Node2D, wave: int = 1) -> void:
+func setup(type: String, wall_line_x: float, gap_ys: Array, core: Node2D, wave: int = 1, boss: bool = false) -> void:
 	type_key = type
-	stats = EnemyData.wave_scaled(type, wave)
+	stats = EnemyData.wave_scaled(type, wave, boss)
 	hp = stats.hp
 	max_hp = stats.hp
 	_wall_line_x = wall_line_x

@@ -41,9 +41,11 @@ static func schedule(index: int) -> Array:
 		budget -= count * float(def.cost)
 		delay += randf_range(1.5, 4.0)
 	if wave % GROUP_SIZE == 0:
+		# Group finale: BOSS pack of the heaviest unlocked type (6x HP, 4x
+		# bounty, oversized) closing out the wave.
 		var heavy: String = unlocked[unlocked.size() - 1]
-		groups.append({"type": heavy, "count": 2 + wave / 20,
-			"interval": 3.0, "delay": delay + 2.0})
+		groups.append({"type": heavy, "count": 1 + wave / 25,
+			"interval": 4.0, "delay": delay + 2.0, "boss": true})
 	return groups
 
 static func wave_clear_bonus(wave_index: int) -> int:

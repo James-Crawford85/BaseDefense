@@ -5,8 +5,8 @@ extends StaticBody2D
 
 var seg_size := Vector2(40, 96)  # set by main before add_child to fit the wall slots
 
-var max_hp: float = 120.0
-var hp: float = 120.0
+var max_hp: float = 250.0
+var hp: float = 250.0
 var destroyed: bool = false
 
 var _poly: Polygon2D
