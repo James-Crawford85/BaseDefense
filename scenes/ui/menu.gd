@@ -177,6 +177,10 @@ func _on_update_available(version: String, _notes: String) -> void:
 		return
 	_update_btn.text = "⬆  Update available: v%s  —  click to install" % version
 	_update_btn.visible = true
+	# QA: `BaseDefense.exe -- --self-update` auto-applies without a click, so an
+	# update can be verified end to end unattended. No-op without the flag.
+	if "--self-update" in OS.get_cmdline_user_args():
+		_on_update_pressed()
 
 func _on_update_pressed() -> void:
 	if _updating:
