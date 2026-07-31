@@ -62,9 +62,12 @@ Write-Host "Pushed"
 $buildDir = Join-Path $repo "build\windows"
 New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
 Get-ChildItem $buildDir -File | Remove-Item -Force -ErrorAction SilentlyContinue
-& $Godot --headless --path $repo --export-release "Windows Desktop" (Join-Path $buildDir "BaseDefense.exe")
+# Drain Godot's (very chatty) stdout to a log; leaving it undrained can stall
+# the export when this script runs under an automation host.
+$exportLog = Join-Path $repo "build\export.log"
+& $Godot --headless --path $repo --export-release "Windows Desktop" (Join-Path $buildDir "BaseDefense.exe") *> $exportLog
 Assert-LastExit "godot export"
-if (-not (Test-Path (Join-Path $buildDir "BaseDefense.exe"))) { throw "Export failed: no exe produced." }
+if (-not (Test-Path (Join-Path $buildDir "BaseDefense.exe"))) { throw "Export failed: no exe produced (see build/export.log)." }
 Write-Host "Exported build"
 
 # 4. steam_appid.txt must sit LOOSE next to the exe (see net.gd / updater notes)
