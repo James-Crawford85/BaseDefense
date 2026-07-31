@@ -28,6 +28,10 @@ var _menu_overlay: Control
 var _results_overlay: Control
 var _results_title: Label
 var _results_stats: Label
+var _levelup_overlay: Control
+var _levelup_buttons: Array = []
+var _levelup_ids: Array = []
+var _kits_label: Label
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -39,6 +43,7 @@ func _ready() -> void:
 	_build_shop()
 	_build_menu()
 	_build_results()
+	_build_levelup()
 	Game.money_changed.connect(_on_money_changed)
 	_on_money_changed(Game.money)
 	_menu_overlay.visible = true
@@ -74,6 +79,11 @@ func _build_hud() -> void:
 	var cbar := _build_bar(Vector2(_w - BAR_W - 16, _h - 28), "CORE", Color(0.3, 0.85, 0.8))
 	_core_fill = cbar.fill
 	_core_value = cbar.value
+
+	_kits_label = _label(self, "", Vector2(0, _h - 26), 14, Color(0.5, 0.9, 1.0))
+	_kits_label.size = Vector2(_w, 20)
+	_kits_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_kits_label.visible = false
 
 func _build_bar(pos: Vector2, caption: String, fill_color: Color) -> Dictionary:
 	var bg := ColorRect.new()
@@ -164,6 +174,46 @@ func _build_results() -> void:
 	_results_stats.size.y = 120
 	_centered_label(_results_overlay, "Press Enter / Start to play again", _h * 0.55, 20, Color(1.0, 0.9, 0.4))
 
+## Level-ups pause the game and demand a pick before play resumes (in co-op,
+## every banked pick is resolved here one at a time before unpausing).
+func _build_levelup() -> void:
+	_levelup_overlay = _overlay()
+	_centered_label(_levelup_overlay, "LEVEL UP!", _h * 0.18, 40, Color(0.5, 0.95, 0.55))
+	_centered_label(_levelup_overlay, "Choose an upgrade to continue", _h * 0.30, 18, Color(0.85, 0.85, 0.9))
+	var btn_w := 240.0
+	var gap := 12.0
+	var x0 := (_w - (btn_w * 3 + gap * 2)) / 2.0
+	for i in range(3):
+		var b := Button.new()
+		b.focus_mode = Control.FOCUS_NONE
+		b.position = Vector2(x0 + i * (btn_w + gap), _h * 0.42)
+		b.custom_minimum_size = Vector2(btn_w, 96)
+		b.add_theme_font_size_override("font_size", 13)
+		b.pressed.connect(_on_levelup_pick.bind(i))
+		_levelup_overlay.add_child(b)
+		_levelup_buttons.append(b)
+
+func _open_levelup() -> void:
+	_levelup_ids = CardPool.draw_stat_picks(3)
+	for i in range(3):
+		var s: Dictionary = CardPool.STATS[_levelup_ids[i]]
+		_levelup_buttons[i].text = "%s\n%s" % [s.label, s.desc]
+	_levelup_overlay.visible = true
+	get_tree().paused = true
+
+func _on_levelup_pick(i: int) -> void:
+	if Game.pending_picks <= 0:
+		return
+	Sfx.play("buy", 0.0)
+	main.player.apply_stat(_levelup_ids[i])
+	Game.pending_picks -= 1
+	if Game.pending_picks > 0:
+		_open_levelup()  # next banked level, fresh options
+		return
+	_levelup_overlay.visible = false
+	if main.state == main.State.WAVE or main.state == main.State.INTERMISSION:
+		get_tree().paused = false
+
 func _overlay() -> Control:
 	var rect := ColorRect.new()
 	rect.color = Color(0, 0, 0, 0.78)
@@ -199,6 +249,19 @@ func _process(_delta: float) -> void:
 	_kills_label.text = "Kills: %d" % Game.kills
 	_level_label.text = "Lv %d" % Game.level
 	_xp_fill.size.x = _xp_bar_w * clampf(float(Game.xp) / float(Game.xp_needed()), 0.0, 1.0)
+
+	var kits: Array = main.tower_kits
+	_kits_label.visible = not kits.is_empty()
+	if not kits.is_empty():
+		var extra := "" if kits.size() == 1 else " (+%d more queued)" % (kits.size() - 1)
+		_kits_label.text = "[E] Deploy %s Tower%s" % [TowerData.TYPES[kits[0]].label, extra]
+
+	# Level-ups interrupt play: pause and force the pick before continuing.
+	if main.state == main.State.WAVE or main.state == main.State.INTERMISSION:
+		if Game.pending_picks > 0 and not _levelup_overlay.visible:
+			_open_levelup()
+	elif _levelup_overlay.visible:
+		_levelup_overlay.visible = false  # run ended mid-pick
 
 	match main.state:
 		main.State.MENU:
@@ -246,6 +309,6 @@ func show_results(victory: bool) -> void:
 	_results_title.text = "VICTORY!" if victory else "THE BASE HAS FALLEN"
 	_results_title.add_theme_color_override("font_color",
 		Color(0.4, 0.95, 0.5) if victory else Color(0.95, 0.35, 0.3))
-	_results_stats.text = "Waves survived: %d / 10\nKills: %d\nTotal earned: $%d" % [
-		Game.waves_survived, Game.kills, Game.total_earned]
+	_results_stats.text = "Waves survived: %d / %d\nKills: %d\nTotal earned: $%d" % [
+		Game.waves_survived, main.FINAL_WAVE, Game.kills, Game.total_earned]
 	_results_overlay.visible = true

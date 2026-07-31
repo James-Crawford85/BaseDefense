@@ -21,7 +21,7 @@ var _wave_index: int = -1
 func start_wave(index: int) -> void:
 	_wave_index = index
 	_schedule.clear()
-	for group in WaveData.WAVES[index]:
+	for group in WaveData.schedule(index):
 		for i in range(group.count):
 			_schedule.append({"time": group.delay + i * group.interval, "type": group.type})
 	_schedule.sort_custom(func(a, b): return a.time < b.time)

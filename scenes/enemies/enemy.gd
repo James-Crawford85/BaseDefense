@@ -138,6 +138,11 @@ func _nearest_victim() -> Node2D:
 	var best: Node2D = null
 	var best_d: float = stats.attack_range * stats.attack_range
 	for group in ["players", "walls", "structures"]:
+		# Gap-seekers never stop to shoot walls — they slip through and hunt
+		# what's behind, which keeps the breach-rush pressure alive now that
+		# every vehicle is armed.
+		if group == "walls" and stats.seeks_gaps:
+			continue
 		for n in get_tree().get_nodes_in_group(group):
 			var node := n as Node2D
 			if node == null:
@@ -172,6 +177,10 @@ func take_damage(amount: float) -> void:
 func die() -> void:
 	Game.register_kill()
 	Sfx.play("explode_big" if stats.body_size >= 34.0 else "explode_small")
+	for n in get_tree().get_nodes_in_group("players"):
+		var p := n as Player
+		if p != null and p.kill_heal > 0.0:
+			p.heal(p.kill_heal)
 	var gold := Pickup.new()
 	gold.kind = "gold"
 	gold.value = stats.money

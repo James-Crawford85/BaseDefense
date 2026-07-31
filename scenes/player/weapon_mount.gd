@@ -99,8 +99,12 @@ func _physics_process(delta: float) -> void:
 	elif target != null and _cooldown <= 0.0:
 		var dir := (target.global_position - global_position).normalized()
 		var aoe: float = _stats.aoe_radius
+		var dmg: float = _stats.damage * tank.damage_mult
+		if randf() < tank.crit_chance:
+			dmg *= 2.0
+			Fx.float_text(global_position, "CRIT", Color(1.0, 0.8, 0.3))
 		var p := Projectile.new()
-		p.setup(dir, _stats.damage * tank.damage_mult, range_eff + 80.0,
+		p.setup(dir, dmg, range_eff + 80.0,
 			WeaponData.WEAPONS[weapon_key].color, false, aoe,
 			420.0 if aoe > 0.0 else 620.0)
 		p.position = global_position + dir * 14.0
@@ -123,13 +127,16 @@ func _flame_tick(target: Node2D, range_eff: float) -> void:
 	var aim := tank.global_rotation + _gun.rotation - PI / 2.0
 	var aim_dir := Vector2.from_angle(aim)
 	var half := deg_to_rad(_stats.cone_degrees) / 2.0
+	var dmg: float = _stats.damage * tank.damage_mult
+	if randf() < tank.crit_chance:
+		dmg *= 2.0
 	for e in get_tree().get_nodes_in_group("enemies"):
 		var n := e as Enemy
 		if n == null:
 			continue
 		var off := n.global_position - global_position
 		if off.length() <= range_eff and absf(aim_dir.angle_to(off)) <= half:
-			n.take_damage(_stats.damage * tank.damage_mult)
+			n.take_damage(dmg)
 
 func _acquire(range_eff: float) -> Node2D:
 	var best: Node2D = null

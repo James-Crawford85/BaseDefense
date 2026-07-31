@@ -1,9 +1,10 @@
 class_name ShopPanel
 extends PanelContainer
-## Intermission "armory": free level-up stat picks (1 of 3 per level gained),
-## then a 4-card randomized shop with escalating reroll. Wall repair stays a
+## Between-group "armory": a 4-card randomized shop with escalating reroll.
+## Buying out all four cards rolls a fresh hand for free. Wall repair stays a
 ## guaranteed fixed button so shop RNG can never lock the player out of it.
 ## Buttons take no keyboard focus so Space/Enter can't misfire purchases.
+## (Level-up stat picks live in the HUD pause overlay now, not here.)
 
 const REPAIR_COST := 40
 const CARD_W := 180.0
@@ -19,13 +20,9 @@ var main  # main.gd (untyped: it has no class_name)
 
 var _cards: Array = []
 var _card_widgets: Array = []
-var _pick_ids: Array = []
-var _pick_buttons: Array = []
 var _rerolls := 0
 
 var _countdown_label: Label
-var _pick_section: VBoxContainer
-var _pick_label: Label
 var _reroll_btn: Button
 var _repair_btn: Button
 
@@ -55,26 +52,6 @@ func _ready() -> void:
 	_countdown_label.add_theme_font_size_override("font_size", 14)
 	_countdown_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
 	vbox.add_child(_countdown_label)
-
-	_pick_section = VBoxContainer.new()
-	_pick_section.add_theme_constant_override("separation", 4)
-	vbox.add_child(_pick_section)
-	_pick_label = Label.new()
-	_pick_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_pick_label.add_theme_font_size_override("font_size", 15)
-	_pick_label.add_theme_color_override("font_color", Color(0.5, 0.95, 0.55))
-	_pick_section.add_child(_pick_label)
-	var pick_row := HBoxContainer.new()
-	pick_row.add_theme_constant_override("separation", 6)
-	_pick_section.add_child(pick_row)
-	for i in range(3):
-		var b := Button.new()
-		b.focus_mode = Control.FOCUS_NONE
-		b.custom_minimum_size = Vector2(166, 58)
-		b.add_theme_font_size_override("font_size", 12)
-		b.pressed.connect(_on_pick.bind(i))
-		pick_row.add_child(b)
-		_pick_buttons.append(b)
 
 	# One-row hand of art cards; the whole card is the buy button. Card frame
 	# art comes from the tier templates (assets/card_lv1..4.png), text is
@@ -144,7 +121,6 @@ func open() -> void:
 	visible = true
 	_rerolls = 0
 	_roll_cards()
-	_refresh_picks()
 	refresh()
 
 func set_countdown(t: float) -> void:
@@ -155,25 +131,6 @@ func _reroll_cost() -> int:
 
 func _roll_cards() -> void:
 	_cards = CardPool.draw_cards(4, main.wave_index + 1, main.player, main)
-
-func _refresh_picks() -> void:
-	if Game.pending_picks <= 0:
-		_pick_section.visible = false
-		return
-	_pick_section.visible = true
-	_pick_label.text = "LEVEL UP! Choose a free upgrade (%d remaining)" % Game.pending_picks
-	_pick_ids = CardPool.draw_stat_picks(3)
-	for i in range(3):
-		var s: Dictionary = CardPool.STATS[_pick_ids[i]]
-		_pick_buttons[i].text = "%s\n%s" % [s.label, s.desc]
-
-func _on_pick(i: int) -> void:
-	if Game.pending_picks <= 0:
-		return
-	Sfx.play("buy", 0.0)
-	main.player.apply_stat(_pick_ids[i])
-	Game.pending_picks -= 1
-	_refresh_picks()
 
 func refresh() -> void:
 	for i in range(_card_widgets.size()):
@@ -202,10 +159,6 @@ func _on_buy(i: int) -> void:
 	var card: Dictionary = _cards[i]
 	if card.get("sold", false):
 		return
-	if card.kind == "tower" and not main.can_place_turret():
-		Fx.float_text(main.player.global_position, "Stand outside the walls!", Color(1, 0.5, 0.4))
-		Sfx.play("deny", 0.0)
-		return
 	if not Game.spend(int(card.cost)):
 		Sfx.play("deny", 0.0)
 		return
@@ -214,9 +167,9 @@ func _on_buy(i: int) -> void:
 		"weapon":
 			main.player.buy_weapon(card.key)
 		"stat":
-			main.player.apply_stat(card.key)
+			main.player.apply_stat(card.key, int(card.get("count", 1)))
 		"tower":
-			main.place_turret(card.key)
+			main.add_tower_kit(card.key)
 		"reinforce":
 			main.reinforce_walls()
 		"rebuild":
@@ -224,6 +177,15 @@ func _on_buy(i: int) -> void:
 		"overcharge":
 			Turret.damage_mult *= 1.3
 	card["sold"] = true
+	# Bought out the whole hand? Fresh cards on the house.
+	var all_sold := true
+	for c in _cards:
+		if not c.get("sold", false):
+			all_sold = false
+			break
+	if all_sold:
+		_roll_cards()
+		Sfx.play("reroll", 0.0)
 	refresh()
 
 func _on_reroll() -> void:

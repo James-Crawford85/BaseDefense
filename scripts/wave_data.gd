@@ -1,59 +1,53 @@
 class_name WaveData
-## The 10 hand-authored waves. Each wave is a list of spawn groups.
-## type: EnemyData key · count: how many · interval: seconds between spawns ·
-## delay: seconds after wave start before the group begins spawning.
-## Pacing: spitters (ranged) debut W3, stingers W4, ogres W7.
+## Procedural wave schedule: 100 waves in 10 groups of 10. The shop only opens
+## between groups, so waves inside a group chain back-to-back with just the
+## incoming-wave breather. Each wave spends a growing point budget on spawn
+## packs; heavier types unlock as the run progresses, and every group finale
+## (wave 10, 20, ...) tops the wave off with a heavy escort pack.
 
-const WAVES: Array = [
-	[{"type": "grunt", "count": 6, "interval": 1.4, "delay": 0.0}],
-	[
-		{"type": "grunt", "count": 8, "interval": 1.1, "delay": 0.0},
-		{"type": "runner", "count": 4, "interval": 0.9, "delay": 4.0},
-	],
-	[
-		{"type": "grunt", "count": 8, "interval": 1.1, "delay": 0.0},
-		{"type": "spitter", "count": 2, "interval": 4.0, "delay": 3.0},
-		{"type": "runner", "count": 4, "interval": 0.8, "delay": 6.0},
-	],
-	[
-		{"type": "stinger", "count": 10, "interval": 0.6, "delay": 0.0},
-		{"type": "grunt", "count": 6, "interval": 1.0, "delay": 3.0},
-	],
-	[
-		{"type": "brute", "count": 2, "interval": 6.0, "delay": 0.0},
-		{"type": "spitter", "count": 4, "interval": 3.0, "delay": 2.0},
-		{"type": "grunt", "count": 6, "interval": 1.0, "delay": 4.0},
-	],
-	[
-		{"type": "runner", "count": 10, "interval": 0.7, "delay": 0.0},
-		{"type": "stinger", "count": 8, "interval": 0.5, "delay": 5.0},
-		{"type": "spitter", "count": 2, "interval": 4.0, "delay": 8.0},
-	],
-	[
-		{"type": "brute", "count": 3, "interval": 5.0, "delay": 0.0},
-		{"type": "ogre", "count": 2, "interval": 7.0, "delay": 3.0},
-		{"type": "grunt", "count": 10, "interval": 0.9, "delay": 2.0},
-		{"type": "spitter", "count": 4, "interval": 3.5, "delay": 8.0},
-	],
-	[
-		{"type": "spitter", "count": 8, "interval": 2.2, "delay": 0.0},
-		{"type": "stinger", "count": 10, "interval": 0.5, "delay": 4.0},
-		{"type": "grunt", "count": 6, "interval": 1.0, "delay": 8.0},
-	],
-	[
-		{"type": "ogre", "count": 4, "interval": 5.0, "delay": 0.0},
-		{"type": "brute", "count": 4, "interval": 4.5, "delay": 2.0},
-		{"type": "runner", "count": 8, "interval": 0.7, "delay": 6.0},
-		{"type": "spitter", "count": 4, "interval": 3.0, "delay": 10.0},
-	],
-	[
-		{"type": "brute", "count": 6, "interval": 3.5, "delay": 0.0},
-		{"type": "ogre", "count": 4, "interval": 5.0, "delay": 2.0},
-		{"type": "grunt", "count": 12, "interval": 0.8, "delay": 3.0},
-		{"type": "stinger", "count": 12, "interval": 0.4, "delay": 8.0},
-		{"type": "spitter", "count": 6, "interval": 2.5, "delay": 10.0},
-	],
-]
+const FINAL_WAVE := 100
+const GROUP_SIZE := 10
+
+## Roster ordered by unlock wave (insertion order matters for the finale pick).
+## cost: budget points per unit · pack: min/max spawned per pack ·
+## interval: base seconds between spawns within a pack.
+const ROSTER: Dictionary = {
+	"grunt": {"unlock": 1, "cost": 1.0, "pack": Vector2i(4, 9), "interval": 1.0},
+	"runner": {"unlock": 3, "cost": 1.2, "pack": Vector2i(3, 8), "interval": 0.7},
+	"stinger": {"unlock": 6, "cost": 1.4, "pack": Vector2i(4, 10), "interval": 0.5},
+	"spitter": {"unlock": 9, "cost": 2.6, "pack": Vector2i(2, 5), "interval": 2.8},
+	"brute": {"unlock": 13, "cost": 3.5, "pack": Vector2i(1, 3), "interval": 4.5},
+	"ogre": {"unlock": 17, "cost": 4.5, "pack": Vector2i(1, 3), "interval": 5.5},
+}
+
+static func schedule(index: int) -> Array:
+	var wave := index + 1
+	var budget := 8.0 + 2.2 * index + 0.008 * index * index
+	var unlocked: Array = []
+	for key in ROSTER:
+		if wave >= int(ROSTER[key].unlock):
+			unlocked.append(key)
+	var groups: Array = []
+	var delay := 0.0
+	while budget > 0.0:
+		var key: String = unlocked[randi() % unlocked.size()]
+		var def: Dictionary = ROSTER[key]
+		var pack: Vector2i = def.pack
+		var count := randi_range(pack.x, pack.y)
+		count = mini(count, maxi(1, int(ceil(budget / float(def.cost)))))
+		groups.append({"type": key, "count": count,
+			"interval": float(def.interval) * randf_range(0.85, 1.15),
+			"delay": delay})
+		budget -= count * float(def.cost)
+		delay += randf_range(1.5, 4.0)
+	if wave % GROUP_SIZE == 0:
+		var heavy: String = unlocked[unlocked.size() - 1]
+		groups.append({"type": heavy, "count": 2 + wave / 20,
+			"interval": 3.0, "delay": delay + 2.0})
+	return groups
 
 static func wave_clear_bonus(wave_index: int) -> int:
-	return 20 + (wave_index + 1) * 5
+	var bonus := 8 + (wave_index + 1) * 2
+	if (wave_index + 1) % GROUP_SIZE == 0:
+		bonus *= 2  # group finale pays double going into the shop
+	return bonus

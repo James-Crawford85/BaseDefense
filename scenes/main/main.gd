@@ -7,8 +7,8 @@ enum State { MENU, WAVE, INTERMISSION, GAME_OVER, VICTORY }
 
 const WALL_SLOTS := 8
 const GAP_SLOTS: Array = [2, 5]
-const INTERMISSION_TIME := 25.0
-const FINAL_WAVE := 10
+const INTERMISSION_TIME := 30.0
+const FINAL_WAVE := WaveData.FINAL_WAVE
 const TURRET_OFFSET := Vector2(46, 0)  # "just ahead" = toward the enemy side
 
 # Landscape layout, derived from the viewport: enemies stream in from the
@@ -21,6 +21,7 @@ var core_pos: Vector2
 var state: State = State.MENU
 var wave_index: int = -1
 var intermission_left: float = 0.0
+var tower_kits: Array = []  # tower type keys bought in the shop, deployed with E
 
 var player: Player
 var core: FortressCore
@@ -170,6 +171,16 @@ func _process(delta: float) -> void:
 		hud.set_countdown(intermission_left)
 		if intermission_left <= 0.0:
 			_start_wave(wave_index + 1)
+	# Real-time tower deployment: E drops the next bought kit at your position.
+	if state == State.WAVE or state == State.INTERMISSION:
+		if player != null and is_instance_valid(player) and player.hp > 0.0 \
+				and Input.is_action_just_pressed("interact") and not tower_kits.is_empty():
+			if can_place_turret():
+				place_turret(tower_kits.pop_front())
+				Sfx.play("buy", 0.0)
+			else:
+				Sfx.play("deny", 0.0)
+				Fx.float_text(player.global_position, "Can't deploy here!", Color(1, 0.5, 0.4))
 
 # --- Run flow ---
 
@@ -209,10 +220,14 @@ func _on_wave_cleared(index: int) -> void:
 		p.vacuum = true
 	if index + 1 >= FINAL_WAVE:
 		_end_run(true)
-	else:
+	elif (index + 1) % WaveData.GROUP_SIZE == 0:
+		# Group finished — the only time the shop opens.
 		state = State.INTERMISSION
 		intermission_left = INTERMISSION_TIME
 		hud.open_shop()
+	else:
+		# Mid-group: roll straight into the next wave (its 2 s warning is the breather).
+		_start_wave(index + 1)
 
 func _on_player_died() -> void:
 	_end_run(false)
@@ -268,12 +283,20 @@ func can_place_turret() -> bool:
 	var pos := turret_spot()
 	return pos.x > wall_x + 60.0 and pos.x < arena_w - 60.0 and pos.y > 40.0 and pos.y < arena_h - 40.0
 
+func add_tower_kit(type_key: String) -> void:
+	tower_kits.append(type_key)
+	if player != null and is_instance_valid(player):
+		Fx.float_text(player.global_position, "%s kit — press E to deploy" % TowerData.TYPES[type_key].label, Color(0.5, 0.9, 1.0))
+
 func place_turret(type_key: String) -> void:
 	place_turret_at(type_key, turret_spot())
 
 func place_turret_at(type_key: String, pos: Vector2) -> void:
 	var t := Turret.new()
 	t.setup(type_key)
+	if player != null and is_instance_valid(player):
+		t.eng_damage = 1.0 + 0.15 * player.engineering
+		t.eng_hp = 1.0 + 0.2 * player.engineering
 	t.position = pos
 	entity_layer.add_child(t)
 	Fx.float_text(pos, "%s tower online" % TowerData.TYPES[type_key].label, Color(0.5, 0.9, 1.0))

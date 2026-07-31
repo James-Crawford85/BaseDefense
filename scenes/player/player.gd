@@ -19,6 +19,11 @@ var range_mult := 1.0
 var armor := 0.0
 var regen := 0.0
 var pickup_radius := 90.0
+var crit_chance := 0.0   # chance any hit deals double damage (cap 60%)
+var dodge := 0.0         # chance to ignore a hit entirely (cap 50%)
+var engineering := 0.0   # towers YOU deploy: +15% damage / +20% HP per point
+var kill_heal := 0.0     # "salvage": HP restored on every enemy kill
+var greed := 1.0         # gold pickup multiplier
 
 var mounts: Array = []
 
@@ -127,26 +132,46 @@ func buy_weapon(key: String) -> void:
 			Fx.float_text(global_position, "%s mounted" % WeaponData.WEAPONS[key].label, Color(0.5, 0.9, 1.0))
 			return
 
-func apply_stat(id: String) -> void:
-	match id:
-		"max_hp":
-			max_hp += 15.0
-			hp = minf(hp + 15.0, max_hp)
-		"damage":
-			damage_mult *= 1.08
-		"fire_rate":
-			fire_rate_mult *= 1.08
-		"speed":
-			move_speed *= 1.06
-		"range":
-			range_mult *= 1.08
-		"regen":
-			regen += 0.6
-		"armor":
-			armor += 1.0
+## `count` lets shop cards sell bigger versions of the same upgrade (x2 / x3).
+func apply_stat(id: String, count: int = 1) -> void:
+	for i in range(count):
+		match id:
+			"max_hp":
+				max_hp += 15.0
+				hp = minf(hp + 15.0, max_hp)
+			"damage":
+				damage_mult *= 1.08
+			"fire_rate":
+				fire_rate_mult *= 1.08
+			"speed":
+				move_speed *= 1.06
+			"range":
+				range_mult *= 1.08
+			"regen":
+				regen += 0.6
+			"armor":
+				armor += 1.0
+			"crit":
+				crit_chance = minf(crit_chance + 0.05, 0.6)
+			"dodge":
+				dodge = minf(dodge + 0.04, 0.5)
+			"engineering":
+				engineering += 1.0
+			"salvage":
+				kill_heal += 0.5
+			"greed":
+				greed += 0.08
+
+func heal(amount: float) -> void:
+	if hp <= 0.0:
+		return
+	hp = minf(hp + amount, max_hp)
 
 func take_damage(amount: float) -> void:
 	if _invuln > 0.0 or hp <= 0.0:
+		return
+	if randf() < dodge:
+		Fx.float_text(global_position, "DODGE", Color(0.6, 0.9, 1.0))
 		return
 	hp -= maxf(1.0, amount - armor)
 	_invuln = 0.6

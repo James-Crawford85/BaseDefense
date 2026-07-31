@@ -12,6 +12,9 @@ var type_key := "standard"
 var stats: Dictionary
 var max_hp: float
 var hp: float
+# Engineering bonuses from the deploying player, locked in at placement.
+var eng_damage: float = 1.0
+var eng_hp: float = 1.0
 
 var _cooldown: float = 0.0
 var _bar: HealthBar
@@ -25,7 +28,7 @@ func setup(key: String) -> void:
 func _ready() -> void:
 	if stats.is_empty():
 		stats = TowerData.TYPES[type_key]
-	max_hp = stats.hp
+	max_hp = stats.hp * eng_hp
 	hp = max_hp
 	add_to_group("structures")
 	collision_layer = 1 << 4
@@ -92,7 +95,7 @@ func _shoot_tick(target: Node2D) -> void:
 	var aoe: float = stats.get("aoe_radius", 0.0)
 	var dir := (target.global_position - global_position).normalized()
 	var p := Projectile.new()
-	p.setup(dir, stats.damage * damage_mult,
+	p.setup(dir, stats.damage * damage_mult * eng_damage,
 		stats.range + 80.0, stats.color.lightened(0.35), false, aoe,
 		420.0 if aoe > 0.0 else 600.0)
 	p.position = global_position + dir * stats.body_size * 0.5
@@ -118,7 +121,7 @@ func _flame_tick(target: Node2D) -> void:
 			continue
 		var off := n.global_position - global_position
 		if off.length() <= stats.range and absf(dir.angle_to(off)) <= half:
-			n.take_damage(stats.damage * damage_mult)
+			n.take_damage(stats.damage * damage_mult * eng_damage)
 
 func take_damage(amount: float) -> void:
 	hp -= amount

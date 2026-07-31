@@ -35,7 +35,7 @@ func _physics_process(delta: float) -> void:
 		return
 	var d := global_position.distance_to(p.global_position)
 	if d < 20.0:
-		_collect()
+		_collect(p)
 		return
 	var radius: float = 1e9 if vacuum else p.pickup_radius
 	if d < radius:
@@ -49,9 +49,9 @@ func _find_player() -> Player:
 			return p
 	return null
 
-func _collect() -> void:
+func _collect(p: Player) -> void:
 	if kind == "gold":
-		Game.add_money(value)
+		Game.add_money(maxi(1, int(round(value * p.greed))))
 		Sfx.play("pickup_gold")
 	else:
 		Game.add_xp(value)
