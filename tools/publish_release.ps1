@@ -74,6 +74,23 @@ Write-Host "Exported build"
 # 4. steam_appid.txt must sit LOOSE next to the exe (see net.gd / updater notes)
 Copy-Item (Join-Path $repo "steam_appid.txt") (Join-Path $buildDir "steam_appid.txt") -Force
 
+# 4b. Pre-flight the loose-file manifest. A headless export can silently omit the
+#     native Steam libraries if the GDExtension fails to load (we've seen the
+#     debug-DLL copy race), and the exit code stays 0. Such a build boots for
+#     players as "Steam cannot be contacted" with no signal here, so verify every
+#     required file is present before we zip and publish.
+foreach ($name in @("BaseDefense.exe", "BaseDefense.pck", "steam_api64.dll", "steam_appid.txt")) {
+    if (-not (Test-Path (Join-Path $buildDir $name))) {
+        throw "Build is missing $name - refusing to publish an incomplete build."
+    }
+}
+# GodotSteam release DLL: match by pattern so an addon version bump won't break this.
+$steamDll = Get-ChildItem $buildDir -Filter "libgodotsteam*template_release*.dll" -ErrorAction SilentlyContinue
+if (-not $steamDll) {
+    throw "Build is missing the GodotSteam release DLL - Steam would fail to init for players. Refusing to publish."
+}
+Write-Host "Verified build manifest (exe, pck, Steam libs, appid)"
+
 # 5. Zip under a top-level BaseDefense/ folder for clean extraction
 $stage = Join-Path $repo "build\BaseDefense"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
