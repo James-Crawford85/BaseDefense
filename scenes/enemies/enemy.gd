@@ -24,6 +24,15 @@ var stats: Dictionary
 var hp: float
 var max_hp: float
 var type_key: String
+var boss := false
+var net_id: int = 0
+## Client-side mirror in multiplayer: no simulation, position/rotation/hp come
+## from host snapshots (see main.gd). Stays in the "enemies" group so local
+## weapon mounts and turret heads can visually track it.
+var puppet := false
+
+var _net_pos := Vector2.ZERO
+var _net_rot := FACE_LEFT
 
 var _wall_line_x: float
 var _gap_ys: Array = []
@@ -35,9 +44,10 @@ var _lost_contact: float = 0.0
 var _bar: HealthBar
 var _visual: Node2D
 
-func setup(type: String, wall_line_x: float, gap_ys: Array, core: Node2D, wave: int = 1, boss: bool = false) -> void:
+func setup(type: String, wall_line_x: float, gap_ys: Array, core: Node2D, wave: int = 1, is_boss: bool = false) -> void:
 	type_key = type
-	stats = EnemyData.wave_scaled(type, wave, boss)
+	boss = is_boss
+	stats = EnemyData.wave_scaled(type, wave, is_boss)
 	hp = stats.hp
 	max_hp = stats.hp
 	_wall_line_x = wall_line_x
@@ -46,6 +56,18 @@ func setup(type: String, wall_line_x: float, gap_ys: Array, core: Node2D, wave: 
 
 func _ready() -> void:
 	add_to_group("enemies")
+	if puppet:
+		_net_pos = position
+		set_physics_process(false)
+		_visual = Node2D.new()
+		_visual.rotation = FACE_LEFT
+		add_child(_visual)
+		_build_vehicle()
+		_bar = HealthBar.new()
+		_bar.width = stats.body_size
+		_bar.position = Vector2(0, -stats.body_size / 2.0 - 8.0)
+		add_child(_bar)
+		return
 	collision_layer = 1 << 2
 	collision_mask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4)
 	_march_y = position.y
@@ -79,6 +101,30 @@ func _build_vehicle() -> void:
 	var k: float = stats.body_size * VEHICLE_LENGTH / maxf(tex.get_width(), tex.get_height())
 	spr.scale = Vector2(k, k)
 	_visual.add_child(spr)
+
+func _process(delta: float) -> void:
+	if not puppet:
+		return
+	position = position.lerp(_net_pos, minf(1.0, 12.0 * delta))
+	_visual.rotation = lerp_angle(_visual.rotation, _net_rot, 12.0 * delta)
+
+func visual_rotation() -> float:
+	return _visual.rotation if _visual != null else FACE_LEFT
+
+## Snapshot update for puppets (client side).
+func net_update(pos: Vector2, rot: float, new_hp: float) -> void:
+	_net_pos = pos
+	_net_rot = rot
+	if new_hp < hp:
+		Fx.flash(self)
+	hp = new_hp
+	if _bar != null:
+		_bar.set_health(hp, max_hp)
+
+## Death fanfare for puppets — drops/scoring already happened on the host.
+func puppet_die() -> void:
+	Sfx.play("explode_big" if stats.body_size >= 34.0 else "explode_small")
+	queue_free()
 
 func _physics_process(delta: float) -> void:
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
@@ -158,15 +204,19 @@ func _nearest_victim() -> Node2D:
 	return best
 
 func _fire_at(victim: Node2D) -> void:
+	var dir := victim.global_position - global_position
 	var p := Projectile.new()
-	p.setup(victim.global_position - global_position, stats.damage,
+	p.setup(dir, stats.damage,
 		stats.attack_range + 140.0, stats.color, true, 0.0, 260.0)
 	p.position = global_position
 	get_parent().add_child(p)
 	Sfx.play("shot_artillery")
+	if Net.game != null:
+		Net.game.broadcast_shot(global_position, dir, 260.0,
+			stats.attack_range + 140.0, stats.color, "shot_artillery")
 
 func take_damage(amount: float) -> void:
-	if hp <= 0.0:
+	if puppet or hp <= 0.0:
 		return
 	hp -= amount
 	Fx.flash(self)
@@ -181,14 +231,10 @@ func die() -> void:
 		var p := n as Player
 		if p != null and p.kill_heal > 0.0:
 			p.heal(p.kill_heal)
-	var gold := Pickup.new()
-	gold.kind = "gold"
-	gold.value = stats.money
-	gold.position = global_position + Vector2(randf_range(-10, 10), randf_range(-10, 10))
-	get_parent().add_child(gold)
-	var orb := Pickup.new()
-	orb.kind = "xp"
-	orb.value = maxi(1, int(round(stats.money * 0.8)))
-	orb.position = global_position + Vector2(randf_range(-10, 10), randf_range(-10, 10))
-	get_parent().add_child(orb)
+	if Net.game != null:
+		Net.game.spawn_pickup("gold", stats.money,
+			global_position + Vector2(randf_range(-10, 10), randf_range(-10, 10)))
+		Net.game.spawn_pickup("xp", maxi(1, int(round(stats.money * 0.8))),
+			global_position + Vector2(randf_range(-10, 10), randf_range(-10, 10)))
+		Net.game.host_enemy_died(self)
 	queue_free()

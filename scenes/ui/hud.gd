@@ -4,13 +4,10 @@ extends CanvasLayer
 ## overlays. Runs in ALWAYS process mode so menus work while the tree is paused.
 
 const BAR_W := 200.0
-const CLASS_ORDER: Array = ["assault", "heavy", "scout"]
 
 var main  # main.gd (untyped: it has no class_name)
 var _w: float
 var _h: float
-var _selected_idx := 0
-var _class_panels: Array = []
 var _xp_fill: ColorRect
 var _level_label: Label
 var _xp_bar_w: float
@@ -24,11 +21,12 @@ var _player_fill: ColorRect
 var _player_value: Label
 var _core_fill: ColorRect
 var _core_value: Label
-var _menu_overlay: Control
 var _results_overlay: Control
 var _results_title: Label
 var _results_stats: Label
+var _results_hint: Label
 var _levelup_overlay: Control
+var _levelup_sub: Label
 var _levelup_buttons: Array = []
 var _levelup_ids: Array = []
 var _kits_label: Label
@@ -41,12 +39,10 @@ func _ready() -> void:
 	_h = vs.y
 	_build_hud()
 	_build_shop()
-	_build_menu()
 	_build_results()
 	_build_levelup()
 	Game.money_changed.connect(_on_money_changed)
 	_on_money_changed(Game.money)
-	_menu_overlay.visible = true
 
 func _build_hud() -> void:
 	_money_label = _label(self, "$0", Vector2(16, 8), 22, Color(1.0, 0.9, 0.4))
@@ -111,75 +107,19 @@ func _build_shop() -> void:
 	shop.main = main
 	add_child(shop)
 
-func _build_menu() -> void:
-	_menu_overlay = _overlay()
-	_centered_label(_menu_overlay, "BASE DEFENSE", _h * 0.04, 44)
-	_centered_label(_menu_overlay, "Choose your tank", _h * 0.115, 20, Color(0.85, 0.85, 0.9))
-	var panel_w := 172.0
-	var gap := 8.0
-	var x0 := (_w - (panel_w * 3 + gap * 2)) / 2.0
-	for i in range(CLASS_ORDER.size()):
-		var data: Dictionary = TankData.CLASSES[CLASS_ORDER[i]]
-		var panel := PanelContainer.new()
-		panel.position = Vector2(x0 + i * (panel_w + gap), _h * 0.17)
-		panel.custom_minimum_size = Vector2(panel_w, 220)
-		var vb := VBoxContainer.new()
-		vb.add_theme_constant_override("separation", 4)
-		panel.add_child(vb)
-		var name_l := Label.new()
-		name_l.text = data.label
-		name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_l.add_theme_font_size_override("font_size", 19)
-		name_l.add_theme_color_override("font_color", data.color.lightened(0.4))
-		vb.add_child(name_l)
-		var stats_l := Label.new()
-		stats_l.text = "HP %d\nSpeed %d\nArmor %d\nDamage x%.2f\nSlots: %d\nStarts: %s" % [
-			int(data.hp), int(data.speed), int(data.armor), data.damage_mult,
-			data.slots.size(), WeaponData.WEAPONS[data.start_weapon].label]
-		stats_l.add_theme_font_size_override("font_size", 13)
-		vb.add_child(stats_l)
-		var blurb_l := Label.new()
-		blurb_l.text = data.blurb
-		blurb_l.add_theme_font_size_override("font_size", 11)
-		blurb_l.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
-		blurb_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		blurb_l.custom_minimum_size = Vector2(panel_w - 16, 0)
-		vb.add_child(blurb_l)
-		panel.gui_input.connect(_on_class_panel_input.bind(i))
-		_menu_overlay.add_child(panel)
-		_class_panels.append(panel)
-	_select_class(0)
-	_centered_label(_menu_overlay, "◄ ► to choose — Enter / Start to roll out", _h * 0.62, 20, Color(1.0, 0.9, 0.4))
-	var controls := _centered_label(_menu_overlay,
-		"WASD / left stick — drive (the hull turns toward your heading)\nSpace — boost · Main turret fires 360°, side mounts only cover\ntheir half — face the fight! Kills drop gold and XP orbs:\ndrive over them to collect. Spend both between waves.",
-		_h * 0.72, 14, Color(0.7, 0.7, 0.75))
-	controls.size.y = 140
-
-func _on_class_panel_input(event: InputEvent, idx: int) -> void:
-	if event is InputEventMouseButton and event.pressed:
-		_select_class(idx)
-
-func _select_class(i: int) -> void:
-	_selected_idx = i
-	for j in range(_class_panels.size()):
-		_class_panels[j].modulate = Color(1, 1, 1) if j == i else Color(0.55, 0.55, 0.6, 0.85)
-
-func selected_class() -> String:
-	return CLASS_ORDER[_selected_idx]
-
 func _build_results() -> void:
 	_results_overlay = _overlay()
 	_results_title = _centered_label(_results_overlay, "", _h * 0.2, 42)
 	_results_stats = _centered_label(_results_overlay, "", _h * 0.32, 22, Color(0.85, 0.85, 0.9))
 	_results_stats.size.y = 120
-	_centered_label(_results_overlay, "Press Enter / Start to play again", _h * 0.55, 20, Color(1.0, 0.9, 0.4))
+	_results_hint = _centered_label(_results_overlay, "", _h * 0.55, 20, Color(1.0, 0.9, 0.4))
 
 ## Level-ups pause the game and demand a pick before play resumes (in co-op,
 ## every banked pick is resolved here one at a time before unpausing).
 func _build_levelup() -> void:
 	_levelup_overlay = _overlay()
 	_centered_label(_levelup_overlay, "LEVEL UP!", _h * 0.18, 40, Color(0.5, 0.95, 0.55))
-	_centered_label(_levelup_overlay, "Choose an upgrade to continue", _h * 0.30, 18, Color(0.85, 0.85, 0.9))
+	_levelup_sub = _centered_label(_levelup_overlay, "Choose an upgrade to continue", _h * 0.30, 18, Color(0.85, 0.85, 0.9))
 	var btn_w := 240.0
 	var gap := 12.0
 	var x0 := (_w - (btn_w * 3 + gap * 2)) / 2.0
@@ -195,9 +135,11 @@ func _build_levelup() -> void:
 
 func _open_levelup() -> void:
 	_levelup_ids = CardPool.draw_stat_picks(3)
+	_levelup_sub.text = "Choose an upgrade to continue"
 	for i in range(3):
 		var s: Dictionary = CardPool.STATS[_levelup_ids[i]]
 		_levelup_buttons[i].text = "%s\n%s" % [s.label, s.desc]
+		_levelup_buttons[i].visible = true
 	_levelup_overlay.visible = true
 	get_tree().paused = true
 
@@ -205,14 +147,25 @@ func _on_levelup_pick(i: int) -> void:
 	if Game.pending_picks <= 0:
 		return
 	Sfx.play("buy", 0.0)
-	main.player.apply_stat(_levelup_ids[i])
+	main.levelup_pick(_levelup_ids[i])
 	Game.pending_picks -= 1
 	if Game.pending_picks > 0:
 		_open_levelup()  # next banked level, fresh options
 		return
+	if Net.active():
+		# Everyone picks; the host resumes play once the whole squad is done.
+		_levelup_sub.text = "Waiting for the rest of the squad..."
+		for b in _levelup_buttons:
+			b.visible = false
+		main.levelup_done()
+		return
 	_levelup_overlay.visible = false
 	if main.state == main.State.WAVE or main.state == main.State.INTERMISSION:
 		get_tree().paused = false
+
+## All peers finished their picks (multiplayer resume).
+func levelup_all_done() -> void:
+	_levelup_overlay.visible = false
 
 func _overlay() -> Control:
 	var rect := ColorRect.new()
@@ -264,13 +217,6 @@ func _process(_delta: float) -> void:
 		_levelup_overlay.visible = false  # run ended mid-pick
 
 	match main.state:
-		main.State.MENU:
-			if Input.is_action_just_pressed("ui_left"):
-				_select_class((_selected_idx + CLASS_ORDER.size() - 1) % CLASS_ORDER.size())
-			if Input.is_action_just_pressed("ui_right"):
-				_select_class((_selected_idx + 1) % CLASS_ORDER.size())
-			if Input.is_action_just_pressed("ui_accept"):
-				main.begin_run(selected_class())
 		main.State.GAME_OVER, main.State.VICTORY:
 			if Input.is_action_just_pressed("ui_accept"):
 				main.restart_run()
@@ -292,9 +238,6 @@ func show_message(text: String, duration: float) -> void:
 	t.tween_property(_message_label, "modulate:a", 0.0, 0.5)
 	t.tween_callback(func(): _message_label.visible = false)
 
-func hide_menu() -> void:
-	_menu_overlay.visible = false
-
 func open_shop() -> void:
 	shop.open()
 
@@ -311,4 +254,10 @@ func show_results(victory: bool) -> void:
 		Color(0.4, 0.95, 0.5) if victory else Color(0.95, 0.35, 0.3))
 	_results_stats.text = "Waves survived: %d / %d\nKills: %d\nTotal earned: $%d" % [
 		Game.waves_survived, main.FINAL_WAVE, Game.kills, Game.total_earned]
+	if Net.active() and not Net.hosting():
+		_results_hint.text = "Waiting for the host to return to the lobby..."
+	elif Net.active():
+		_results_hint.text = "Press Enter / Start to bring the squad back to the lobby"
+	else:
+		_results_hint.text = "Press Enter / Start to play again"
 	_results_overlay.visible = true

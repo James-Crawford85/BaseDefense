@@ -1,6 +1,8 @@
 extends Node
 ## Autoload: cheap juice helpers — screen shake, hit flash, floating text.
 ## main.gd registers `camera` and `world` each time the scene (re)loads.
+## In multiplayer the host broadcasts shake/boom/float_text so clients see the
+## same juice; local calls on clients stay local (their own UI feedback).
 
 var camera: Camera2D
 var world: Node2D
@@ -17,7 +19,9 @@ func _process(delta: float) -> void:
 		camera.offset = Vector2.ZERO
 
 func shake(strength: float) -> void:
-	_shake_strength = maxf(_shake_strength, strength)
+	if Net.hosting():
+		rpc(&"_net_shake", strength)
+	_shake_local(strength)
 
 func flash(item: CanvasItem) -> void:
 	if not is_instance_valid(item):
@@ -27,6 +31,31 @@ func flash(item: CanvasItem) -> void:
 	t.tween_property(item, "modulate", Color.WHITE, 0.15)
 
 func boom(pos: Vector2, radius: float, color: Color) -> void:
+	if Net.hosting():
+		rpc(&"_net_boom", pos, radius, color)
+	_boom_local(pos, radius, color)
+
+func float_text(pos: Vector2, text: String, color: Color = Color.WHITE) -> void:
+	if Net.hosting():
+		rpc(&"_net_float_text", pos, text, color)
+	_float_text_local(pos, text, color)
+
+@rpc("authority", "reliable")
+func _net_shake(strength: float) -> void:
+	_shake_local(strength)
+
+@rpc("authority", "reliable")
+func _net_boom(pos: Vector2, radius: float, color: Color) -> void:
+	_boom_local(pos, radius, color)
+
+@rpc("authority", "reliable")
+func _net_float_text(pos: Vector2, text: String, color: Color) -> void:
+	_float_text_local(pos, text, color)
+
+func _shake_local(strength: float) -> void:
+	_shake_strength = maxf(_shake_strength, strength)
+
+func _boom_local(pos: Vector2, radius: float, color: Color) -> void:
 	if world == null or not is_instance_valid(world):
 		return
 	var n := Polygon2D.new()
@@ -40,14 +69,14 @@ func boom(pos: Vector2, radius: float, color: Color) -> void:
 	n.scale = Vector2(0.4, 0.4)
 	n.z_index = 50
 	world.add_child(n)
-	shake(3.0)
+	_shake_local(3.0)
 	var t := n.create_tween()
 	t.set_parallel(true)
 	t.tween_property(n, "scale", Vector2.ONE, 0.22)
 	t.tween_property(n, "modulate:a", 0.0, 0.3)
 	t.chain().tween_callback(n.queue_free)
 
-func float_text(pos: Vector2, text: String, color: Color = Color.WHITE) -> void:
+func _float_text_local(pos: Vector2, text: String, color: Color) -> void:
 	if world == null or not is_instance_valid(world):
 		return
 	var label := Label.new()

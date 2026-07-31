@@ -9,6 +9,14 @@ extends CharacterBody2D
 signal died
 
 var class_key := "assault"
+## Which peer drives this tank. In multiplayer each peer simulates its own
+## tank's movement (broadcast to everyone); combat/HP stay host-authoritative.
+var peer_id := 1
+
+var _net_pos := Vector2.ZERO
+var _net_rot := 0.0
+var _send_accum := 0.0
+var _dead_visual := false
 
 var max_hp := 100.0
 var hp := 100.0
@@ -85,12 +93,23 @@ func _build_hull(color: Color) -> void:
 	stripe.color = color.lightened(0.35)
 	add_child(stripe)
 
+func is_local() -> bool:
+	return not Net.active() or peer_id == Net.my_id()
+
 func _physics_process(delta: float) -> void:
+	if hp <= 0.0:
+		return
 	_invuln -= delta
 	_dash_cooldown -= delta
 	_dash_time -= delta
-	if regen > 0.0 and hp > 0.0:
+	if Net.is_authority() and regen > 0.0:
 		hp = minf(hp + regen * delta, max_hp)
+
+	if not is_local():
+		# Remote tank: follow the owner's broadcast transform.
+		position = position.lerp(_net_pos, minf(1.0, 12.0 * delta))
+		rotation = lerp_angle(rotation, _net_rot, 12.0 * delta)
+		return
 
 	var input_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0.0 and input_dir != Vector2.ZERO:
@@ -103,6 +122,34 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	if input_dir != Vector2.ZERO:
 		rotation = lerp_angle(rotation, input_dir.angle() + PI / 2.0, 8.0 * delta)
+
+	if Net.active():
+		_send_accum += delta
+		if _send_accum >= 0.05 and Net.game != null:
+			_send_accum = 0.0
+			Net.game.rpc(&"net_player_pos", position, rotation)
+
+func net_transform(pos: Vector2, rot: float) -> void:
+	_net_pos = pos
+	_net_rot = rot
+
+## Snapshot HP mirror on clients (host owns damage/heals).
+func net_set_hp(new_hp: float, new_max: float) -> void:
+	if Net.is_authority():
+		return
+	max_hp = new_max
+	if new_hp < hp:
+		Fx.flash(self)
+	hp = new_hp
+	if hp <= 0.0 and not _dead_visual:
+		_die_visual()
+
+func _die_visual() -> void:
+	_dead_visual = true
+	hp = 0.0
+	hide()
+	set_physics_process(false)
+	collision_layer = 0
 
 # --- Weapon slot management (shop hooks) ---
 
@@ -120,17 +167,20 @@ func lowest_mount_with(key: String) -> WeaponMount:
 	return best
 
 ## Duplicate purchases upgrade the owned copy; otherwise fill an empty slot.
-func buy_weapon(key: String) -> void:
+## Returns the changed mount index (-1 if nothing changed) so multiplayer can
+## mirror the loadout on every peer.
+func buy_weapon(key: String) -> int:
 	var owned := lowest_mount_with(key)
 	if owned != null and owned.level < WeaponData.MAX_LEVEL:
 		owned.set_weapon(key, owned.level + 1)
 		Fx.float_text(global_position, "%s → Lv %d" % [WeaponData.WEAPONS[key].label, owned.level], Color(0.5, 0.9, 1.0))
-		return
+		return mounts.find(owned)
 	for m in mounts:
 		if m.weapon_key == "":
 			m.set_weapon(key, 1)
 			Fx.float_text(global_position, "%s mounted" % WeaponData.WEAPONS[key].label, Color(0.5, 0.9, 1.0))
-			return
+			return mounts.find(m)
+	return -1
 
 ## `count` lets shop cards sell bigger versions of the same upgrade (x2 / x3).
 func apply_stat(id: String, count: int = 1) -> void:
@@ -168,6 +218,8 @@ func heal(amount: float) -> void:
 	hp = minf(hp + amount, max_hp)
 
 func take_damage(amount: float) -> void:
+	if not Net.is_authority():
+		return  # damage is host-authoritative; clients mirror via net_set_hp
 	if _invuln > 0.0 or hp <= 0.0:
 		return
 	if randf() < dodge:
@@ -179,8 +231,5 @@ func take_damage(amount: float) -> void:
 	Fx.shake(4.0)
 	Sfx.play("player_hit")
 	if hp <= 0.0:
-		hp = 0.0
-		hide()
-		set_physics_process(false)
-		collision_layer = 0
+		_die_visual()
 		died.emit()

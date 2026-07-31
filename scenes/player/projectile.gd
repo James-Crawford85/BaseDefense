@@ -10,6 +10,9 @@ var _travel_left := 0.0
 var _color := Color.WHITE
 var _enemy_shot := false
 var _aoe := 0.0
+## Tracer-only mode for multiplayer clients: flies and expires, never collides
+## (all damage happens on the host).
+var visual := false
 
 func setup(direction: Vector2, damage: float, max_travel: float, color: Color,
 		enemy_shot: bool = false, aoe_radius: float = 0.0, speed: float = 600.0) -> void:
@@ -21,16 +24,18 @@ func setup(direction: Vector2, damage: float, max_travel: float, color: Color,
 	_aoe = aoe_radius
 
 func _ready() -> void:
-	collision_layer = 1 << 3
-	if _enemy_shot:
-		collision_mask = (1 << 0) | (1 << 1) | (1 << 4)
-	else:
-		collision_mask = 1 << 2
-	var shape := CollisionShape2D.new()
-	var circle := CircleShape2D.new()
-	circle.radius = 5.0
-	shape.shape = circle
-	add_child(shape)
+	if not visual:
+		collision_layer = 1 << 3
+		if _enemy_shot:
+			collision_mask = (1 << 0) | (1 << 1) | (1 << 4)
+		else:
+			collision_mask = 1 << 2
+		var shape := CollisionShape2D.new()
+		var circle := CircleShape2D.new()
+		circle.radius = 5.0
+		shape.shape = circle
+		add_child(shape)
+		body_entered.connect(_on_body_entered)
 	var poly := Polygon2D.new()
 	var pts := PackedVector2Array()
 	for i in range(8):
@@ -39,7 +44,6 @@ func _ready() -> void:
 	poly.polygon = pts
 	poly.color = _color
 	add_child(poly)
-	body_entered.connect(_on_body_entered)
 
 func _physics_process(delta: float) -> void:
 	var step := _velocity * delta

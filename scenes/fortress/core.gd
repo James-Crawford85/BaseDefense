@@ -34,7 +34,7 @@ func _ready() -> void:
 	add_child(_bar)
 
 func take_damage(amount: float) -> void:
-	if _dead:
+	if _dead or not Net.is_authority():
 		return
 	hp -= amount
 	Fx.flash(self)
@@ -46,3 +46,14 @@ func take_damage(amount: float) -> void:
 		_dead = true
 		_poly.color = Color(0.2, 0.25, 0.25)
 		core_destroyed.emit()
+
+## Snapshot mirror on clients.
+func net_hp(new_hp: float) -> void:
+	if new_hp < hp:
+		Fx.flash(self)
+		Sfx.play("core_hit")
+	hp = new_hp
+	_bar.set_health(hp, max_hp)
+	if hp <= 0.0 and not _dead:
+		_dead = true
+		_poly.color = Color(0.2, 0.25, 0.25)

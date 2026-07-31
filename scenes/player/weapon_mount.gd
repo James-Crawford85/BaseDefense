@@ -96,21 +96,27 @@ func _physics_process(delta: float) -> void:
 
 	if _stats.behavior == "flame":
 		_flame_tick(target, range_eff)
-	elif target != null and _cooldown <= 0.0:
+	elif target != null and _cooldown <= 0.0 and Net.is_authority():
+		# Firing (and damage) is simulation-authority only; clients see the
+		# tracer via the broadcast_shot event and just traverse their guns.
 		var dir := (target.global_position - global_position).normalized()
 		var aoe: float = _stats.aoe_radius
 		var dmg: float = _stats.damage * tank.damage_mult
 		if randf() < tank.crit_chance:
 			dmg *= 2.0
 			Fx.float_text(global_position, "CRIT", Color(1.0, 0.8, 0.3))
+		var speed := 420.0 if aoe > 0.0 else 620.0
 		var p := Projectile.new()
 		p.setup(dir, dmg, range_eff + 80.0,
-			WeaponData.WEAPONS[weapon_key].color, false, aoe,
-			420.0 if aoe > 0.0 else 620.0)
+			WeaponData.WEAPONS[weapon_key].color, false, aoe, speed)
 		p.position = global_position + dir * 14.0
 		tank.get_parent().add_child(p)
 		_cooldown = 1.0 / (_stats.fire_rate * tank.fire_rate_mult)
-		Sfx.play(SHOT_SFX.get(weapon_key, "shot_auto"))
+		var sfx: String = SHOT_SFX.get(weapon_key, "shot_auto")
+		Sfx.play(sfx)
+		if Net.game != null:
+			Net.game.broadcast_shot(p.position, dir, speed, range_eff + 80.0,
+				WeaponData.WEAPONS[weapon_key].color, sfx)
 
 func _flame_tick(target: Node2D, range_eff: float) -> void:
 	if _cone == null:
@@ -120,10 +126,12 @@ func _flame_tick(target: Node2D, range_eff: float) -> void:
 		return
 	_cone.rotation = _gun.rotation - PI / 2.0
 	_cone.visible = true
-	if _cooldown > 0.0:
+	if _cooldown > 0.0 or not Net.is_authority():
 		return
 	_cooldown = 1.0 / (_stats.fire_rate * tank.fire_rate_mult)
 	Sfx.play("flame")
+	if Net.hosting():
+		Net.game.rpc(&"cl_sfx", "flame")
 	var aim := tank.global_rotation + _gun.rotation - PI / 2.0
 	var aim_dir := Vector2.from_angle(aim)
 	var half := deg_to_rad(_stats.cone_degrees) / 2.0

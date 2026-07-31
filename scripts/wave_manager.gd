@@ -5,6 +5,7 @@ extends Node
 signal wave_cleared(wave_index: int)
 
 var arena: Node2D
+var main: Node = null  # registers spawned enemies for net replication
 var wall_line_x: float = 0.0
 var gap_ys: Array = []
 var core: Node2D
@@ -53,3 +54,5 @@ func _spawn(type: String, boss: bool = false) -> void:
 	enemy.setup(type, wall_line_x, gap_ys, core, _wave_index + 1, boss)
 	enemy.position = Vector2(spawn_edge_x + randf_range(40.0, 80.0), randf_range(spawn_y_min, spawn_y_max))
 	arena.add_child(enemy)
+	if main != null:
+		main.host_register_enemy(enemy)

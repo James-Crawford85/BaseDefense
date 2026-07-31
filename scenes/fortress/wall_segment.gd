@@ -55,7 +55,7 @@ func _crenellated_outline() -> PackedVector2Array:
 	return pts
 
 func take_damage(amount: float) -> void:
-	if destroyed:
+	if destroyed or not Net.is_authority():
 		return
 	hp -= amount
 	Fx.flash(self)
@@ -63,6 +63,21 @@ func take_damage(amount: float) -> void:
 	_update_visual()
 	if hp <= 0.0:
 		_destroy()
+
+## Snapshot mirror on clients: handles damage, breach and rebuild transitions.
+func net_apply(new_hp: float, new_max: float, new_destroyed: bool) -> void:
+	max_hp = new_max
+	if new_destroyed and not destroyed:
+		hp = 0.0
+		_destroy()
+		return
+	if not new_destroyed and destroyed:
+		rebuild()
+	if new_hp < hp:
+		Fx.flash(self)
+		Sfx.play("wall_hit")
+	hp = new_hp
+	_update_visual()
 
 func _update_visual() -> void:
 	var frac := clampf(hp / max_hp, 0.0, 1.0)

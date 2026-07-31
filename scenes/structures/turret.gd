@@ -15,6 +15,10 @@ var hp: float
 # Engineering bonuses from the deploying player, locked in at placement.
 var eng_damage: float = 1.0
 var eng_hp: float = 1.0
+var net_id: int = 0
+## Client-side mirror in multiplayer: tracks targets visually but never fires
+## or takes damage — shots/HP come from the host.
+var puppet := false
 
 var _cooldown: float = 0.0
 var _bar: HealthBar
@@ -90,18 +94,22 @@ func _physics_process(delta: float) -> void:
 		_shoot_tick(target)
 
 func _shoot_tick(target: Node2D) -> void:
-	if _cooldown > 0.0 or target == null:
+	if _cooldown > 0.0 or target == null or puppet:
 		return
 	var aoe: float = stats.get("aoe_radius", 0.0)
 	var dir := (target.global_position - global_position).normalized()
+	var speed := 420.0 if aoe > 0.0 else 600.0
 	var p := Projectile.new()
 	p.setup(dir, stats.damage * damage_mult * eng_damage,
-		stats.range + 80.0, stats.color.lightened(0.35), false, aoe,
-		420.0 if aoe > 0.0 else 600.0)
+		stats.range + 80.0, stats.color.lightened(0.35), false, aoe, speed)
 	p.position = global_position + dir * stats.body_size * 0.5
 	get_parent().add_child(p)
 	_cooldown = 1.0 / stats.fire_rate
-	Sfx.play(SHOT_SFX.get(type_key, "shot_auto"))
+	var sfx: String = SHOT_SFX.get(type_key, "shot_auto")
+	Sfx.play(sfx)
+	if Net.game != null:
+		Net.game.broadcast_shot(p.position, dir, speed, stats.range + 80.0,
+			stats.color.lightened(0.35), sfx)
 
 func _flame_tick(target: Node2D) -> void:
 	if target == null:
@@ -110,10 +118,12 @@ func _flame_tick(target: Node2D) -> void:
 	var dir := (target.global_position - global_position).normalized()
 	_cone.rotation = dir.angle()
 	_cone.visible = true
-	if _cooldown > 0.0:
+	if _cooldown > 0.0 or puppet:
 		return
 	_cooldown = 1.0 / stats.fire_rate
 	Sfx.play("flame")
+	if Net.hosting():
+		Net.game.rpc(&"cl_sfx", "flame")
 	var half := deg_to_rad(stats.cone_degrees) / 2.0
 	for e in get_tree().get_nodes_in_group("enemies"):
 		var n := e as Enemy
@@ -124,11 +134,25 @@ func _flame_tick(target: Node2D) -> void:
 			n.take_damage(stats.damage * damage_mult * eng_damage)
 
 func take_damage(amount: float) -> void:
+	if puppet:
+		return
 	hp -= amount
 	Fx.flash(self)
 	_bar.set_health(hp, max_hp)
 	if hp <= 0.0:
 		Fx.float_text(global_position, "%s tower destroyed!" % stats.label, Color(1, 0.4, 0.3))
-		Fx.shake(5.0)
-		Sfx.play("explode_small")
+		death_fx()
+		if Net.game != null:
+			Net.game.host_turret_died(self)
 		queue_free()
+
+func death_fx() -> void:
+	Fx.shake(5.0)
+	Sfx.play("explode_small")
+
+## Snapshot HP mirror for puppets.
+func net_hp(new_hp: float) -> void:
+	if new_hp < hp:
+		Fx.flash(self)
+	hp = new_hp
+	_bar.set_health(hp, max_hp)

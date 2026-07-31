@@ -25,6 +25,7 @@ var _rerolls := 0
 var _countdown_label: Label
 var _reroll_btn: Button
 var _repair_btn: Button
+var _start_btn: Button
 
 func _ready() -> void:
 	visible = false
@@ -95,12 +96,12 @@ func _ready() -> void:
 	_repair_btn.focus_mode = Control.FOCUS_NONE
 	_repair_btn.pressed.connect(_on_repair)
 	bottom.add_child(_repair_btn)
-	var start := Button.new()
-	start.text = "START NEXT WAVE"
-	start.focus_mode = Control.FOCUS_NONE
-	start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	start.pressed.connect(func(): main.request_start_wave())
-	bottom.add_child(start)
+	_start_btn = Button.new()
+	_start_btn.text = "START NEXT WAVE"
+	_start_btn.focus_mode = Control.FOCUS_NONE
+	_start_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_start_btn.pressed.connect(func(): main.request_start_wave())
+	bottom.add_child(_start_btn)
 
 ## Overlay label positioned by fractional anchors within a card's rect.
 func _card_label(parent: Control, ax0: float, ay0: float, ax1: float, ay1: float, font_size: int) -> Label:
@@ -117,10 +118,59 @@ func _card_label(parent: Control, ax0: float, ay0: float, ax1: float, ay1: float
 	parent.add_child(l)
 	return l
 
+## The simulation authority rolls the hand; multiplayer clients receive theirs
+## via set_cards (host broadcasts every change).
 func open() -> void:
 	visible = true
-	_rerolls = 0
+	if Net.is_authority():
+		_rerolls = 0
+		_roll_cards()
+	refresh()
+
+func cards() -> Array:
+	return _cards
+
+func rerolls() -> int:
+	return _rerolls
+
+func set_cards(cards: Array, reroll_count: int) -> void:
+	_cards = cards
+	_rerolls = reroll_count
+	if visible:
+		refresh()
+
+## Called by main after a purchase: free refresh when the hand sells out.
+func after_sale() -> void:
+	var all_sold := true
+	for c in _cards:
+		if not c.get("sold", false):
+			all_sold = false
+			break
+	if all_sold:
+		_roll_cards()
+		Sfx.play("reroll", 0.0)
+	refresh()
+
+## Host-side reroll/repair on behalf of `buyer` (shared gold pool).
+func do_reroll(buyer: int) -> void:
+	if not Game.spend(_reroll_cost()):
+		main._sfx_for(buyer, "deny")
+		return
+	main._sfx_for(buyer, "reroll")
+	_rerolls += 1
 	_roll_cards()
+	refresh()
+	if Net.hosting():
+		main.rpc(&"cl_shop_state", _cards, _rerolls)
+
+func do_repair(buyer: int) -> void:
+	if not main.repairable_walls():
+		return
+	if not Game.spend(REPAIR_COST):
+		main._sfx_for(buyer, "deny")
+		return
+	main._sfx_for(buyer, "buy")
+	main.repair_walls()
 	refresh()
 
 func set_countdown(t: float) -> void:
@@ -154,55 +204,27 @@ func refresh() -> void:
 	_reroll_btn.disabled = _reroll_cost() > Game.money
 	_repair_btn.text = "Repair walls $%d" % REPAIR_COST
 	_repair_btn.disabled = REPAIR_COST > Game.money or not main.repairable_walls()
+	# Only the host can cut the intermission short (it owns the wave clock).
+	var is_client: bool = Net.active() and not Net.is_authority()
+	_start_btn.disabled = is_client
+	_start_btn.text = "HOST STARTS THE WAVE" if is_client else "START NEXT WAVE"
 
 func _on_buy(i: int) -> void:
-	var card: Dictionary = _cards[i]
-	if card.get("sold", false):
+	if i >= _cards.size() or _cards[i].get("sold", false):
 		return
-	if not Game.spend(int(card.cost)):
-		Sfx.play("deny", 0.0)
+	if Net.active() and not Net.is_authority():
+		main.rpc_id(1, &"srv_buy", i)
 		return
-	Sfx.play("buy", 0.0)
-	match card.kind:
-		"weapon":
-			main.player.buy_weapon(card.key)
-		"stat":
-			main.player.apply_stat(card.key, int(card.get("count", 1)))
-		"tower":
-			main.add_tower_kit(card.key)
-		"reinforce":
-			main.reinforce_walls()
-		"rebuild":
-			main.rebuild_walls()
-		"overcharge":
-			Turret.damage_mult *= 1.3
-	card["sold"] = true
-	# Bought out the whole hand? Fresh cards on the house.
-	var all_sold := true
-	for c in _cards:
-		if not c.get("sold", false):
-			all_sold = false
-			break
-	if all_sold:
-		_roll_cards()
-		Sfx.play("reroll", 0.0)
-	refresh()
+	main.execute_buy(Net.my_id(), i)
 
 func _on_reroll() -> void:
-	if not Game.spend(_reroll_cost()):
-		Sfx.play("deny", 0.0)
+	if Net.active() and not Net.is_authority():
+		main.rpc_id(1, &"srv_reroll")
 		return
-	Sfx.play("reroll", 0.0)
-	_rerolls += 1
-	_roll_cards()
-	refresh()
+	do_reroll(Net.my_id())
 
 func _on_repair() -> void:
-	if not main.repairable_walls():
+	if Net.active() and not Net.is_authority():
+		main.rpc_id(1, &"srv_repair")
 		return
-	if not Game.spend(REPAIR_COST):
-		Sfx.play("deny", 0.0)
-		return
-	Sfx.play("buy", 0.0)
-	main.repair_walls()
-	refresh()
+	do_repair(Net.my_id())

@@ -7,12 +7,20 @@ extends Node2D
 var kind := "gold"  # "gold" | "xp"
 var value := 1
 var vacuum := false
+var net_id: int = 0
+## Client-side mirror: drifts toward snapshot positions, never collects
+## (the host detects collection and broadcasts it).
+var puppet := false
 
 var _vel := Vector2.ZERO
+var _net_pos := Vector2.ZERO
 
 func _ready() -> void:
 	add_to_group("pickups")
 	z_index = 5
+	if puppet:
+		_net_pos = position
+		set_physics_process(false)
 	_vel = Vector2.from_angle(randf() * TAU) * randf_range(50.0, 130.0)
 	var poly := Polygon2D.new()
 	if kind == "gold":
@@ -42,12 +50,26 @@ func _physics_process(delta: float) -> void:
 		global_position = global_position.move_toward(
 			p.global_position, (280.0 + (radius - d) * 3.0) * delta)
 
+func _process(delta: float) -> void:
+	if puppet:
+		position = position.lerp(_net_pos, minf(1.0, 10.0 * delta))
+
+func net_pos(pos: Vector2) -> void:
+	_net_pos = pos
+
+## Nearest living tank — in co-op the drop magnets to whoever is closest.
 func _find_player() -> Player:
+	var best: Player = null
+	var best_d := 1e18
 	for n in get_tree().get_nodes_in_group("players"):
 		var p := n as Player
-		if p != null and p.hp > 0.0:
-			return p
-	return null
+		if p == null or p.hp <= 0.0:
+			continue
+		var d := p.global_position.distance_squared_to(global_position)
+		if d < best_d:
+			best_d = d
+			best = p
+	return best
 
 func _collect(p: Player) -> void:
 	if kind == "gold":
@@ -56,4 +78,6 @@ func _collect(p: Player) -> void:
 	else:
 		Game.add_xp(value)
 		Sfx.play("pickup_xp")
+	if Net.game != null:
+		Net.game.host_pickup_taken(self)
 	queue_free()

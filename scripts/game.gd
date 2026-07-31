@@ -51,3 +51,13 @@ func add_xp(amount: int) -> void:
 
 func register_kill() -> void:
 	kills += 1
+
+## Client-side mirror of the host's economy (applied from snapshots).
+func net_apply(new_money: int, new_xp: int, new_level: int, new_kills: int) -> void:
+	xp = new_xp
+	level = new_level
+	kills = new_kills
+	total_earned = maxi(total_earned, new_money)
+	if new_money != money:
+		money = new_money
+		money_changed.emit(money)
