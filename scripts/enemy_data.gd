@@ -40,12 +40,18 @@ const TYPES: Dictionary = {
 }
 
 # Per-wave difficulty growth, applied at spawn time (see wave_scaled):
-# HP outpaces damage so late waves demand both firepower AND survivability;
-# bounty grows slower than either so income never fully keeps pace.
+# HP outpaces damage so late waves demand both firepower AND survivability.
 # Base HP values are small (1-3 hit lights), so HP leans on this growth.
 const HP_GROWTH := 0.10
 const DAMAGE_GROWTH := 0.045
-const MONEY_GROWTH := 0.035
+# Bounty grows on sqrt(wave) rather than linearly: it climbs quickly through the
+# early waves (when you need those first upgrades) then flattens out, so the
+# swelling late-wave swarms don't multiply into insane payouts. Since the number
+# of enemies dropping gold already rises every wave (the wave budget grows), a
+# gentle per-coin curve is enough. Paired with the linear HP growth above, income
+# never keeps pace with cost on its own -- players have to invest in greed
+# ("War Profiteer") to actually get rich.
+const MONEY_GROWTH := 0.16
 
 # Group-finale boss packs: multipliers on top of wave scaling.
 const BOSS_HP_MULT := 6.0
@@ -73,7 +79,11 @@ static func stats_for(key: String) -> Dictionary:
 		"damage": damage,
 		"attack_cooldown": def.cooldown,
 		"attack_range": def.attack_range,
-		"money": int(round(2.0 + hp / 8.0 + dps / 4.0 + speed / 60.0)),
+		# Base bounty is deliberately tiny: 1-2 for light chassis, ~3 for heavies,
+		# so a fresh coin is worth 1-3 gold. Wave scaling (below) grows this and
+		# greed upgrades multiply it -- gold stays a resource you choose how to
+		# spend, not something you drown in.
+		"money": maxi(1, int(round(0.6 + hp / 40.0 + dps / 22.0 + speed / 320.0))),
 		"body_size": def.body_size,
 		"color": def.color,
 		"vehicle": def.vehicle,
@@ -87,7 +97,7 @@ static func wave_scaled(key: String, wave: int, boss: bool = false) -> Dictionar
 	var w := maxi(wave - 1, 0)
 	s.hp = s.hp * (1.0 + HP_GROWTH * w)
 	s.damage = s.damage * (1.0 + DAMAGE_GROWTH * w)
-	s.money = int(round(s.money * (1.0 + MONEY_GROWTH * w)))
+	s.money = maxi(1, int(round(s.money * (1.0 + MONEY_GROWTH * sqrt(float(w))))))
 	if boss:
 		s.hp = s.hp * BOSS_HP_MULT
 		s.money = int(round(s.money * BOSS_MONEY_MULT))
