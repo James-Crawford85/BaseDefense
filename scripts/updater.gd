@@ -186,12 +186,14 @@ func _write_apply_script(install_dir: String, src_dir: String, exe_name: String)
 	var src := ProjectSettings.globalize_path(src_dir).replace("/", "\\")
 	var lines := [
 		"@echo off",
-		"REM Base Defense self-updater — waits for the game to close, swaps files, relaunches.",
+		"REM Base Defense self-updater - waits for the game to close, swaps files, relaunches.",
 		"timeout /t 2 /nobreak >nul",
 		"robocopy \"%s\" \"%s\" /E /IS /IT /NFL /NDL /NJH /NJS /NC /NS >nul" % [src, install],
 		"rmdir /s /q \"%s\\.update\"" % install,
 		"start \"\" \"%s\\%s\"" % [install, exe_name],
-		"del \"%%~f0\"",
+		# Robust self-delete: (goto) with no label makes cmd release the batch
+		# file handle, then del removes it. %~f0 needs a single %.
+		"(goto) 2>nul & del \"%~f0\"",
 	]
 	var bat := install_dir.path_join("apply_update.bat")
 	var f := FileAccess.open(bat, FileAccess.WRITE)
