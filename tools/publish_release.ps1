@@ -44,11 +44,19 @@ Write-Host "Set config/version = $Version"
 #    (git prints an LF/CRLF warning to stderr - harmless; we check exit codes.)
 git -C $repo add project.godot
 Assert-LastExit "git add"
-git -C $repo commit -m "Release $tag"
-Assert-LastExit "git commit"
+# Only commit if the version actually changed (re-running for the same version
+# is fine). git diff --cached --quiet exits 1 when there are staged changes.
+git -C $repo diff --cached --quiet
+if ($LASTEXITCODE -ne 0) {
+    git -C $repo commit -m "Release $tag"
+    Assert-LastExit "git commit"
+    Write-Host "Committed version bump"
+} else {
+    Write-Host "Version already committed - nothing to commit"
+}
 git -C $repo push
 Assert-LastExit "git push"
-Write-Host "Committed and pushed version bump"
+Write-Host "Pushed"
 
 # 3. Export the Windows build
 $buildDir = Join-Path $repo "build\windows"
