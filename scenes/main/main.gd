@@ -15,6 +15,8 @@ enum State { MENU, WAVE, INTERMISSION, GAME_OVER, VICTORY }
 const WALL_SLOTS := 8
 const GAP_SLOTS: Array = [2, 5]
 const INTERMISSION_TIME := 30.0
+const PULL_TIME := 1.5  # length of the end-of-group resource sweep before the shop
+const PICKUP_MERGE_RADIUS := 46.0  # gold dropped this close to a coin merges into it
 const FINAL_WAVE := WaveData.FINAL_WAVE
 const TURRET_OFFSET := Vector2(46, 0)  # "just ahead" = toward the enemy side
 const SNAPSHOT_INTERVAL := 0.08
@@ -320,21 +322,35 @@ func _on_wave_cleared(index: int) -> void:
 	var bonus := WaveData.wave_clear_bonus(index)
 	Game.add_money(bonus)
 	Fx.float_text(Vector2(arena_w / 2.0 - 40, arena_h * 0.4), "Wave clear +$%d" % bonus, Color(1, 0.9, 0.4))
-	# Vacuum leftover drops to the players so nothing is stranded up-field.
+	var group_end := (index + 1) >= FINAL_WAVE or (index + 1) % WaveData.GROUP_SIZE == 0
+	if not group_end:
+		# Mid-group: bank XP so leveling is never lost, but LEAVE gold on the
+		# ground -- players earn it by driving out into the field to grab it.
+		for p in get_tree().get_nodes_in_group("pickups"):
+			if p.kind == "xp":
+				p.vacuum = true
+		# Roll straight into the next wave (its 2 s warning is the breather).
+		_start_wave(index + 1)
+		return
+
+	# End of a 10-wave group (or the final wave): physically sweep EVERYTHING
+	# still on the field to the players, then open the shop / end once it lands.
 	for p in get_tree().get_nodes_in_group("pickups"):
 		p.vacuum = true
 	if index + 1 >= FINAL_WAVE:
-		_end_run(true)
-	elif (index + 1) % WaveData.GROUP_SIZE == 0:
-		# Group finished — the only time the shop opens.
-		state = State.INTERMISSION
-		intermission_left = INTERMISSION_TIME
-		hud.open_shop()
-		if Net.hosting():
-			rpc(&"cl_shop_open", hud.shop.cards(), hud.shop.rerolls())
+		get_tree().create_timer(PULL_TIME).timeout.connect(func(): _end_run(true))
 	else:
-		# Mid-group: roll straight into the next wave (its 2 s warning is the breather).
-		_start_wave(index + 1)
+		get_tree().create_timer(PULL_TIME).timeout.connect(_open_group_shop)
+
+## Opens the intermission shop after the end-of-group resource sweep has played.
+func _open_group_shop() -> void:
+	if state == State.GAME_OVER or state == State.VICTORY:
+		return
+	state = State.INTERMISSION
+	intermission_left = INTERMISSION_TIME
+	hud.open_shop()
+	if Net.hosting():
+		rpc(&"cl_shop_open", hud.shop.cards(), hud.shop.rerolls())
 
 func _on_player_died() -> void:
 	# Co-op rule: the run only ends when EVERY tank is down (or the core pops).
@@ -525,6 +541,16 @@ func host_enemy_died(e: Enemy) -> void:
 		rpc(&"cl_enemy_died", e.net_id)
 
 func spawn_pickup(kind: String, value: int, pos: Vector2) -> void:
+	# Gold now lingers on the ground for a whole 10-wave group, so merge coins
+	# that land near each other into one growing pile rather than spawning a node
+	# per kill -- keeps the pickup count (and the snapshot it streams) bounded.
+	if kind == "gold":
+		for id in _pickups:
+			var ex: Pickup = _pickups[id]
+			if is_instance_valid(ex) and ex.kind == "gold" and not ex.vacuum \
+					and ex.position.distance_to(pos) < PICKUP_MERGE_RADIUS:
+				ex.value += value
+				return
 	var pk := Pickup.new()
 	pk.kind = kind
 	pk.value = value
