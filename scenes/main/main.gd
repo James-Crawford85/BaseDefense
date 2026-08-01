@@ -38,6 +38,7 @@ var walls: Array = []
 var wave_manager: WaveManager
 var hud: Hud
 var menu: Menu
+var pause_menu: PauseMenu
 var entity_layer: Node2D
 
 # Networked entity registries (host: authoritative nodes; client: puppets).
@@ -93,6 +94,10 @@ func _ready() -> void:
 	menu = Menu.new()
 	menu.main = self
 	add_child(menu)
+
+	pause_menu = PauseMenu.new()
+	pause_menu.main = self
+	add_child(pause_menu)
 
 	Net.game_starting.connect(_on_net_game_starting)
 

@@ -12,8 +12,11 @@ const MENU_MUSIC := "res://assets/music/MenuTheme.mp3"
 const MUSIC_BUS := "Music"
 const SFX_BUS := "SFX"
 
+const WINDOWED_SIZE := Vector2i(1280, 720)
+
 var music_volume := 0.6   # 0..1 linear
 var sfx_volume := 0.9
+var fullscreen := true     # matches the project's default window mode
 
 var _music: AudioStreamPlayer
 var _menu_stream: AudioStream
@@ -30,6 +33,7 @@ func _ready() -> void:
 			_menu_stream.loop = true  # menu theme should loop until a run starts
 	_load_settings()
 	_apply_volumes()
+	_apply_window_mode()  # restore the saved fullscreen/windowed choice at boot
 
 ## Recreate the Music/SFX buses if the bus layout didn't provide them.
 func _ensure_buses() -> void:
@@ -70,6 +74,26 @@ func _apply_volumes() -> void:
 	_apply_bus(MUSIC_BUS, music_volume)
 	_apply_bus(SFX_BUS, sfx_volume)
 
+# --- Video / window mode ---
+
+func set_fullscreen(on: bool) -> void:
+	fullscreen = on
+	_apply_window_mode()
+	_save_settings()
+
+func _apply_window_mode() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if fullscreen:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		# Give windowed mode a sensible size and center it (the project's base
+		# window is deliberately small for the stretch canvas).
+		DisplayServer.window_set_size(WINDOWED_SIZE)
+		var screen := DisplayServer.screen_get_size(DisplayServer.window_get_current_screen())
+		DisplayServer.window_set_position((screen - WINDOWED_SIZE) / 2)
+
 func _apply_bus(bus_name: String, v: float) -> void:
 	var idx := AudioServer.get_bus_index(bus_name)
 	if idx == -1:
@@ -90,10 +114,12 @@ func _load_settings() -> void:
 		return  # first run — keep defaults
 	music_volume = clampf(float(cfg.get_value("audio", "music", music_volume)), 0.0, 1.0)
 	sfx_volume = clampf(float(cfg.get_value("audio", "sfx", sfx_volume)), 0.0, 1.0)
+	fullscreen = bool(cfg.get_value("video", "fullscreen", fullscreen))
 
 func _save_settings() -> void:
 	var cfg := ConfigFile.new()
 	cfg.load(SETTINGS_PATH)  # preserve any other sections we don't own
 	cfg.set_value("audio", "music", music_volume)
 	cfg.set_value("audio", "sfx", sfx_volume)
+	cfg.set_value("video", "fullscreen", fullscreen)
 	cfg.save(SETTINGS_PATH)
