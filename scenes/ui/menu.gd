@@ -331,9 +331,10 @@ func _build_title() -> void:
 	_hud_button(row, "SETTINGS", "", small, true).pressed.connect(_on_settings_pressed)
 	_hud_button(row, "EXIT", "", small, true).pressed.connect(func(): get_tree().quit())
 
-	# Update notification — hidden until check_for_updates finds a newer release.
-	_update_btn = _btn(_title_screen, "", Vector2(468, 40), true)
-	_update_btn.position = Vector2(lx, _h * 0.30 + 92 * 3 + 14 * 2 + 66 + 22)
+	# Update notification — a top-center banner, hidden until check_for_updates
+	# finds a newer release.
+	_update_btn = _btn(_title_screen, "", Vector2(560, 40), true)
+	_update_btn.position = Vector2(_w / 2.0 - 280, _h * 0.03)
 	_update_btn.visible = false
 	_update_btn.pressed.connect(_on_update_pressed)
 
@@ -449,12 +450,12 @@ func _build_lobby() -> void:
 	# Class cards: a tank portrait shows the name only until hovered, when the
 	# full stat sheet fades in (see _process for the fade).
 	var panel_w := 210.0
-	var panel_h := 280.0
+	var panel_h := 250.0
 	var gap := 16.0
 	var x0 := (_w - (panel_w * 3 + gap * 2)) / 2.0
 	for i in range(CLASS_ORDER.size()):
 		var panel := _build_class_card(CLASS_ORDER[i], Vector2(panel_w, panel_h))
-		panel.position = Vector2(x0 + i * (panel_w + gap), _h * 0.165)
+		panel.position = Vector2(x0 + i * (panel_w + gap), _h * 0.17)
 		panel.gui_input.connect(_on_class_panel_input.bind(i))
 		panel.mouse_entered.connect(func(): panel.set_meta("hover_target", 1.0))
 		panel.mouse_exited.connect(func(): panel.set_meta("hover_target", 0.0))
@@ -464,7 +465,7 @@ func _build_lobby() -> void:
 	# Roster
 	_roster_box = VBoxContainer.new()
 	_roster_box.add_theme_constant_override("separation", 4)
-	_roster_box.position = Vector2(_w / 2.0 - 220, _h * 0.60)
+	_roster_box.position = Vector2(_w / 2.0 - 220, _h * 0.65)
 	_roster_box.custom_minimum_size = Vector2(440, 0)
 	_lobby_screen.add_child(_roster_box)
 
@@ -731,12 +732,22 @@ func _on_lobby_list(lobbies: Array) -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
 		var name_l := _label(row, String(lb.name) if String(lb.name) != "" else "Unnamed squad", 15)
-		name_l.custom_minimum_size = Vector2(300, 0)
+		name_l.custom_minimum_size = Vector2(260, 0)
 		_label(row, "%d / %d" % [int(lb.players), int(lb.cap)], 15, TEXT_DIM)
-		var jb := _btn(row, "JOIN", Vector2(90, 34), true)
-		jb.pressed.connect(func():
-			_join_status.text = "Joining %s..." % String(lb.name)
-			Net.join_steam_lobby(int(lb.id)))
+		# Flag version mismatches up front so a doomed join isn't even offered.
+		var ver := String(lb.get("version", ""))
+		var mismatch: bool = ver != "" and ver != Net.game_version()
+		var ver_l := _label(row, ("v%s" % ver) if ver != "" else "v?", 14,
+			Color(0.95, 0.5, 0.45) if mismatch else TEXT_DIM)
+		ver_l.custom_minimum_size = Vector2(90, 0)
+		if mismatch:
+			var note := _btn(row, "UPDATE NEEDED", Vector2(150, 34))
+			note.disabled = true
+		else:
+			var jb := _btn(row, "JOIN", Vector2(90, 34), true)
+			jb.pressed.connect(func():
+				_join_status.text = "Joining %s..." % String(lb.name)
+				Net.join_steam_lobby(int(lb.id)))
 		_list_box.add_child(row)
 
 # --- Net signal handlers ---

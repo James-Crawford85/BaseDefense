@@ -85,6 +85,11 @@ func player_name() -> String:
 		return steam_name
 	return "Commander %d" % (my_id() % 1000)
 
+## Build version both peers must share to play together (from project settings).
+## Used by the join handshake and advertised in Steam lobby data.
+func game_version() -> String:
+	return str(ProjectSettings.get_setting("application/config/version", "0.0.0"))
+
 # --- Hosting / joining ---
 
 func host_game(force_lan := false) -> void:
@@ -109,6 +114,7 @@ func _on_steam_lobby_created(connect_result: int, this_lobby_id: int) -> void:
 	lobby_id = this_lobby_id
 	Steam.setLobbyData(lobby_id, "game", LOBBY_KEY)
 	Steam.setLobbyData(lobby_id, "name", "%s's squad" % player_name())
+	Steam.setLobbyData(lobby_id, "version", game_version())  # shown in the browser
 	var peer := SteamMultiplayerPeer.new()
 	var err: int = peer.host_with_lobby(lobby_id)
 	if err != OK:
@@ -183,6 +189,7 @@ func _on_steam_lobby_list(lobbies: Array) -> void:
 			"name": Steam.getLobbyData(id, "name"),
 			"players": Steam.getNumLobbyMembers(id),
 			"cap": Steam.getLobbyMemberLimit(id),
+			"version": Steam.getLobbyData(id, "version"),
 		})
 	lobby_list_ready.emit(out)
 
@@ -225,12 +232,14 @@ func _on_peer_disconnected(peer_id: int) -> void:
 			game.host_peer_left(peer_id)
 
 func _on_connected_to_server() -> void:
-	rpc_id(1, &"srv_hello", player_name())
+	rpc_id(1, &"srv_hello", player_name(), game_version())
 
 func _on_connection_failed() -> void:
 	_fail("Connection failed — host not reachable.")
 
 func _on_server_disconnected() -> void:
+	if mode == Mode.OFFLINE:
+		return  # already torn down (e.g. after a version-mismatch kick)
 	var was_started := started
 	_fail("Lost connection to the host.")
 	if was_started:
@@ -240,13 +249,29 @@ func _on_server_disconnected() -> void:
 # --- Lobby roster RPCs (host relays authoritative state) ---
 
 @rpc("any_peer", "reliable")
-func srv_hello(display_name: String) -> void:
+func srv_hello(display_name: String, version: String = "") -> void:
 	if not hosting():
 		return
 	var sender := multiplayer.get_remote_sender_id()
+	# Reject mismatched builds before they can desync the sim. Clients too old to
+	# send a version (or to understand cl_kick) just never get added, and the
+	# backstop timer below drops them.
+	if version != game_version():
+		var shown := version if version != "" else "an older build"
+		rpc_id(sender, &"cl_kick", "Version mismatch: host is v%s, you have v%s. Update to join." % [game_version(), shown])
+		var peer := multiplayer.multiplayer_peer
+		get_tree().create_timer(1.0).timeout.connect(func():
+			if peer != null and multiplayer.multiplayer_peer == peer and peer.has_method("disconnect_peer"):
+				peer.disconnect_peer(sender))
+		return
 	roster[sender] = {"name": display_name, "tank": "assault", "ready": false}
 	rpc(&"cl_roster", roster)
 	lobby_updated.emit()
+
+## Host rejected us (e.g. version mismatch) — surface why and drop to the menu.
+@rpc("authority", "reliable")
+func cl_kick(reason: String) -> void:
+	_fail(reason)
 
 @rpc("any_peer", "reliable")
 func srv_set_tank(tank: String) -> void:
