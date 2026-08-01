@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Cut and publish a new Base Defense release in one step.
+  Cut and publish a new Steel Tide release in one step.
 
 .DESCRIPTION
   Bumps application/config/version, commits + pushes it, exports the Windows
@@ -31,7 +31,7 @@ function Assert-LastExit([string]$What) {
 
 $repo = Split-Path $PSScriptRoot -Parent
 $tag = "v$Version"
-Write-Host "== Publishing Base Defense $tag ==" -ForegroundColor Cyan
+Write-Host "== Publishing Steel Tide $tag ==" -ForegroundColor Cyan
 
 # 1. Bump config/version (BOM-free so Godot parses project.godot cleanly)
 $projPath = Join-Path $repo "project.godot"
@@ -104,8 +104,8 @@ Write-Host ("Packaged {0} ({1} MB)" -f $zip, $zipMB)
 
 # 6. Publish the GitHub release
 if ([string]::IsNullOrWhiteSpace($Notes)) {
-    $Notes = "Base Defense $tag. Download, extract, keep all files together, run BaseDefense.exe with Steam running. In-game the updater offers this automatically to anyone on an older build."
+    $Notes = "Steel Tide $tag. Download, extract, keep all files together, run BaseDefense.exe with Steam running. In-game the updater offers this automatically to anyone on an older build."
 }
-gh release create $tag $zip --repo James-Crawford85/BaseDefense --title "Base Defense $tag" --notes $Notes
+gh release create $tag $zip --repo James-Crawford85/BaseDefense --title "Steel Tide $tag" --notes $Notes
 Assert-LastExit "gh release create"
 Write-Host ("== Done: https://github.com/James-Crawford85/BaseDefense/releases/tag/{0} ==" -f $tag) -ForegroundColor Green

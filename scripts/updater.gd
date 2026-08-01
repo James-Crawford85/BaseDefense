@@ -186,7 +186,7 @@ func _write_apply_script(install_dir: String, src_dir: String, exe_name: String)
 	var src := ProjectSettings.globalize_path(src_dir).replace("/", "\\")
 	var lines := [
 		"@echo off",
-		"REM Base Defense self-updater - waits for the game to close, swaps files, relaunches.",
+		"REM Steel Tide self-updater - waits for the game to close, swaps files, relaunches.",
 		"timeout /t 2 /nobreak >nul",
 		"robocopy \"%s\" \"%s\" /E /IS /IT /NFL /NDL /NJH /NJS /NC /NS >nul" % [src, install],
 		"rmdir /s /q \"%s\\.update\"" % install,

@@ -304,7 +304,7 @@ func _build_title() -> void:
 	var lx := _w * 0.06
 
 	# Title block, upper-left over the battlefield art.
-	var title := _label(_title_screen, "BASE DEFENSE", 62, TITLE_GOLD)
+	var title := _label(_title_screen, "STEEL TIDE", 62, TITLE_GOLD)
 	title.position = Vector2(lx, _h * 0.09)
 	title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 	title.add_theme_constant_override("outline_size", 8)
