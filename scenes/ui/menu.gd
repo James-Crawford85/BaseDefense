@@ -19,6 +19,7 @@ var main  # main.gd
 
 var _bg_tex: Texture2D
 var _btn_tex: Texture2D
+var _tank_tex: Dictionary = {}  # class key -> portrait Texture2D
 
 var _w: float
 var _h: float
@@ -97,6 +98,10 @@ func _load_art() -> void:
 		_bg_tex = load(BG_PATH)
 	if ResourceLoader.exists(BUTTON_PATH):
 		_btn_tex = load(BUTTON_PATH)
+	for key in CLASS_ORDER:
+		var path := "res://assets/ui/tank_%s.jpg" % key
+		if ResourceLoader.exists(path):
+			_tank_tex[key] = load(path)
 
 ## A full-screen backdrop: battlefield art (cover-fit), a global scrim for text
 ## legibility, and a left-edge gradient so the button stack always reads clearly.
@@ -441,29 +446,18 @@ func _build_lobby() -> void:
 	_lobby_title = _centered(_lobby_screen, "MISSION PREP", _h * 0.045, 34)
 	_lobby_context = _centered(_lobby_screen, "", _h * 0.125, 14, TEXT_DIM)
 
-	# Class panels
-	var panel_w := 176.0
-	var gap := 10.0
+	# Class cards: a tank portrait shows the name only until hovered, when the
+	# full stat sheet fades in (see _process for the fade).
+	var panel_w := 210.0
+	var panel_h := 280.0
+	var gap := 16.0
 	var x0 := (_w - (panel_w * 3 + gap * 2)) / 2.0
 	for i in range(CLASS_ORDER.size()):
-		var data: Dictionary = TankData.CLASSES[CLASS_ORDER[i]]
-		var panel := PanelContainer.new()
-		panel.position = Vector2(x0 + i * (panel_w + gap), _h * 0.175)
-		panel.custom_minimum_size = Vector2(panel_w, 205)
-		panel.add_theme_stylebox_override("panel", _panel_style(i == 0))
-		var vb := VBoxContainer.new()
-		vb.add_theme_constant_override("separation", 3)
-		panel.add_child(vb)
-		var name_l := _label(vb, data.label, 18, data.color.lightened(0.4))
-		name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var stats_l := _label(vb, "HP %d · Speed %d · Armor %d\nDamage x%.2f · Slots %d\nStarts: %s" % [
-			int(data.hp), int(data.speed), int(data.armor), data.damage_mult,
-			data.slots.size(), WeaponData.WEAPONS[data.start_weapon].label], 12)
-		stats_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var blurb_l := _label(vb, data.blurb, 11, TEXT_DIM)
-		blurb_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		blurb_l.custom_minimum_size = Vector2(panel_w - 24, 0)
+		var panel := _build_class_card(CLASS_ORDER[i], Vector2(panel_w, panel_h))
+		panel.position = Vector2(x0 + i * (panel_w + gap), _h * 0.165)
 		panel.gui_input.connect(_on_class_panel_input.bind(i))
+		panel.mouse_entered.connect(func(): panel.set_meta("hover_target", 1.0))
+		panel.mouse_exited.connect(func(): panel.set_meta("hover_target", 0.0))
 		_lobby_screen.add_child(panel)
 		_class_panels.append(panel)
 
@@ -485,6 +479,118 @@ func _build_lobby() -> void:
 	_start_btn.pressed.connect(_on_start_pressed)
 	_btn(row, "LEAVE", Vector2(180, 42)).pressed.connect(_on_leave_pressed)
 
+## Builds one Mission Prep tank card: portrait background, always-visible name,
+## and a stat sheet that starts hidden (modulate.a 0) and fades in on hover.
+func _build_class_card(key: String, size: Vector2) -> Control:
+	var data: Dictionary = TankData.CLASSES[key]
+	var panel := Control.new()
+	panel.custom_minimum_size = size
+	panel.size = size
+	panel.clip_contents = true
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	# Portrait background (cover-fit), or a flat tint if the art is missing.
+	if _tank_tex.has(key):
+		var bg := TextureRect.new()
+		bg.texture = _tank_tex[key]
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(bg)
+	else:
+		var flat := ColorRect.new()
+		flat.color = Color(0.1, 0.12, 0.15)
+		flat.set_anchors_preset(Control.PRESET_FULL_RECT)
+		flat.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(flat)
+
+	# Subtle base scrim so the name always reads over the portrait.
+	var scrim := ColorRect.new()
+	scrim.color = Color(0.02, 0.03, 0.05, 0.22)
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(scrim)
+
+	# Detail sheet: hidden until hover. A dark panel dims the portrait so the
+	# stats stay legible, with the stats + blurb on top.
+	var details := Control.new()
+	details.set_anchors_preset(Control.PRESET_FULL_RECT)
+	details.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	details.modulate = Color(1, 1, 1, 0)
+	panel.add_child(details)
+	var dbg := ColorRect.new()
+	dbg.color = Color(0.03, 0.05, 0.07, 0.82)
+	dbg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dbg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	details.add_child(dbg)
+	var stats := Label.new()
+	stats.text = "HP %d\nSpeed %d\nArmor %d\nDamage x%.2f\nSlots %d\nStarts: %s" % [
+		int(data.hp), int(data.speed), int(data.armor), data.damage_mult,
+		data.slots.size(), WeaponData.WEAPONS[data.start_weapon].label]
+	stats.add_theme_font_size_override("font_size", 13)
+	stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stats.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stats.position = Vector2(8, 48)
+	stats.size = Vector2(size.x - 16, 0)
+	details.add_child(stats)
+	var blurb := Label.new()
+	blurb.text = data.blurb
+	blurb.add_theme_font_size_override("font_size", 11)
+	blurb.add_theme_color_override("font_color", TEXT_DIM)
+	blurb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	blurb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	blurb.position = Vector2(10, size.y - 76)
+	blurb.size = Vector2(size.x - 20, 68)
+	details.add_child(blurb)
+
+	# Tank name — always visible, drawn above the detail sheet.
+	var name_l := Label.new()
+	name_l.text = data.label
+	name_l.add_theme_font_size_override("font_size", 20)
+	name_l.add_theme_color_override("font_color", data.color.lightened(0.4))
+	name_l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	name_l.add_theme_constant_override("outline_size", 5)
+	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_l.position = Vector2(0, 14)
+	name_l.size = Vector2(size.x, 28)
+	panel.add_child(name_l)
+
+	# Selection border on top.
+	var border := Panel.new()
+	border.set_anchors_preset(Control.PRESET_FULL_RECT)
+	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	border.add_theme_stylebox_override("panel", _class_border_style(false))
+	panel.add_child(border)
+
+	panel.set_meta("details", details)
+	panel.set_meta("border", border)
+	panel.set_meta("hover_target", 0.0)
+	return panel
+
+func _class_border_style(selected: bool) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)  # transparent — the portrait shows through
+	sb.border_color = ACCENT if selected else Color(0.35, 0.4, 0.47, 0.8)
+	sb.set_border_width_all(3 if selected else 1)
+	return sb
+
+## Drives the hover fade of the class cards' detail sheets. Runs while the tree
+## is paused (menu is PROCESS_MODE_ALWAYS), so a manual lerp is used instead of a
+## Tween, which would stall under pause.
+func _process(delta: float) -> void:
+	for panel in _class_panels:
+		if not is_instance_valid(panel):
+			continue
+		var details = panel.get_meta("details", null)
+		if details == null:
+			continue
+		var target: float = panel.get_meta("hover_target", 0.0)
+		if details.modulate.a != target:
+			details.modulate.a = move_toward(details.modulate.a, target, delta * 6.0)
+
 func _on_class_panel_input(event: InputEvent, idx: int) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		_select_class(CLASS_ORDER[idx])
@@ -505,7 +611,9 @@ func _refresh_lobby() -> void:
 		return
 	var mine := _my_class()
 	for i in range(_class_panels.size()):
-		_class_panels[i].add_theme_stylebox_override("panel", _panel_style(CLASS_ORDER[i] == mine))
+		var border = _class_panels[i].get_meta("border", null)
+		if border != null:
+			border.add_theme_stylebox_override("panel", _class_border_style(CLASS_ORDER[i] == mine))
 
 	for c in _roster_box.get_children():
 		c.queue_free()
