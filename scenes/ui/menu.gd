@@ -9,8 +9,16 @@ const CLASS_ORDER: Array = ["assault", "heavy", "scout"]
 const ACCENT := Color(1.0, 0.78, 0.3)
 const PANEL_BG := Color(0.09, 0.11, 0.14, 0.97)
 const TEXT_DIM := Color(0.62, 0.66, 0.72)
+const TITLE_GOLD := Color(0.98, 0.72, 0.22)
+const BTN_TITLE := Color(0.98, 0.92, 0.82)
+
+const BG_PATH := "res://assets/ui/menu_background.jpg"
+const BUTTON_PATH := "res://assets/ui/button_hud.png"
 
 var main  # main.gd
+
+var _bg_tex: Texture2D
+var _btn_tex: Texture2D
 
 var _w: float
 var _h: float
@@ -44,6 +52,7 @@ func _ready() -> void:
 	var vs := get_viewport().get_visible_rect().size
 	_w = vs.x
 	_h = vs.y
+	_load_art()
 	_build_title()
 	_build_lobby()
 	_build_join()
@@ -76,19 +85,160 @@ func _show(screen: Control) -> void:
 
 # --- Shared building blocks ---
 
-func _screen() -> Control:
-	var root := ColorRect.new()
-	root.color = Color(0.03, 0.045, 0.06, 0.88)
+## Loads the menu art once. Guarded with ResourceLoader.exists so headless smoke
+## runs (where imports may be absent) fall back to flat styling instead of erroring.
+func _load_art() -> void:
+	if ResourceLoader.exists(BG_PATH):
+		_bg_tex = load(BG_PATH)
+	if ResourceLoader.exists(BUTTON_PATH):
+		_btn_tex = load(BUTTON_PATH)
+
+## A full-screen backdrop: battlefield art (cover-fit), a global scrim for text
+## legibility, and a left-edge gradient so the button stack always reads clearly.
+## `scrim` darkens the whole screen — low for the art-forward title, higher for
+## the content-heavy lobby/join screens.
+func _screen(scrim := 0.35) -> Control:
+	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.visible = false
+	# Solid base shows through when the art hasn't imported (headless/fallback).
+	var base := ColorRect.new()
+	base.color = Color(0.03, 0.045, 0.06, 1.0)
+	base.set_anchors_preset(Control.PRESET_FULL_RECT)
+	base.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(base)
+	if _bg_tex != null:
+		var bg := TextureRect.new()
+		bg.texture = _bg_tex
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		root.add_child(bg)
+	var global_scrim := ColorRect.new()
+	global_scrim.color = Color(0.02, 0.03, 0.05, scrim)
+	global_scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	global_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(global_scrim)
+	var left := TextureRect.new()
+	left.texture = _left_fade()
+	left.set_anchors_preset(Control.PRESET_FULL_RECT)
+	left.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	left.stretch_mode = TextureRect.STRETCH_SCALE
+	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(left)
+	# Bottom vignette so the secondary buttons and status strip read cleanly over
+	# the background's baked-in instrument panel.
+	var bottom := TextureRect.new()
+	bottom.texture = _bottom_fade()
+	bottom.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bottom.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bottom.stretch_mode = TextureRect.STRETCH_SCALE
+	bottom.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(bottom)
 	add_child(root)
 	return root
+
+## Horizontal dark-to-clear gradient used as a left-edge scrim under the menu.
+func _left_fade() -> GradientTexture2D:
+	var grad := Gradient.new()
+	grad.offsets = PackedFloat32Array([0.0, 0.55])
+	grad.colors = PackedColorArray([Color(0.02, 0.03, 0.05, 0.85), Color(0.02, 0.03, 0.05, 0.0)])
+	var gtex := GradientTexture2D.new()
+	gtex.gradient = grad
+	gtex.width = 512
+	gtex.height = 4
+	gtex.fill_from = Vector2(0, 0)
+	gtex.fill_to = Vector2(1, 0)
+	return gtex
+
+## Vertical clear-to-dark gradient used to darken the bottom of the screen.
+func _bottom_fade() -> GradientTexture2D:
+	var grad := Gradient.new()
+	grad.offsets = PackedFloat32Array([0.62, 1.0])
+	grad.colors = PackedColorArray([Color(0.02, 0.03, 0.05, 0.0), Color(0.02, 0.03, 0.05, 0.82)])
+	var gtex := GradientTexture2D.new()
+	gtex.gradient = grad
+	gtex.width = 4
+	gtex.height = 512
+	gtex.fill_from = Vector2(0, 0)
+	gtex.fill_to = Vector2(0, 1)
+	return gtex
+
+## A big HUD-frame button (uses the keyed button art as a nine-patch). `title`
+## is the main label; `subtitle` an optional dim line under it; `compact` shrinks
+## the frame margins and centers the title for the small Settings/Exit buttons.
+func _hud_button(parent: Node, title: String, subtitle: String, size: Vector2, compact := false) -> Button:
+	var b := Button.new()
+	b.custom_minimum_size = size
+	b.focus_mode = Control.FOCUS_ALL
+	b.clip_contents = false
+	if _btn_tex != null:
+		b.add_theme_stylebox_override("normal", _hud_style(compact, Color(0.86, 0.86, 0.9)))
+		b.add_theme_stylebox_override("hover", _hud_style(compact, Color(1, 1, 1)))
+		b.add_theme_stylebox_override("focus", _hud_style(compact, Color(1, 1, 1)))
+		b.add_theme_stylebox_override("pressed", _hud_style(compact, Color(0.62, 0.62, 0.66)))
+		b.add_theme_stylebox_override("disabled", _hud_style(compact, Color(0.45, 0.45, 0.5)))
+	else:
+		# Fallback: reuse the flat button look when art is unavailable.
+		_apply_flat_style(b)
+	# Title + optional subtitle drawn as child labels so we get two type sizes and
+	# a left-aligned layout the plain Button.text can't manage. IGNORE so clicks
+	# still hit the button.
+	var t := Label.new()
+	t.text = title
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	t.add_theme_font_size_override("font_size", 22 if compact else 32)
+	t.add_theme_color_override("font_color", BTN_TITLE)
+	t.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	t.add_theme_constant_override("outline_size", 5)
+	if compact:
+		t.set_anchors_preset(Control.PRESET_FULL_RECT)
+		t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		t.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	else:
+		t.position = Vector2(34, size.y * 0.20 if subtitle != "" else size.y * 0.30)
+		t.size = Vector2(size.x - 60, 38)
+		t.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	b.add_child(t)
+	if subtitle != "" and not compact:
+		var s := Label.new()
+		s.text = subtitle
+		s.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		s.add_theme_font_size_override("font_size", 13)
+		s.add_theme_color_override("font_color", TEXT_DIM)
+		s.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+		s.add_theme_constant_override("outline_size", 4)
+		s.position = Vector2(36, size.y * 0.56)
+		s.size = Vector2(size.x - 60, 18)
+		b.add_child(s)
+	parent.add_child(b)
+	return b
+
+func _hud_style(compact: bool, mod: Color) -> StyleBoxTexture:
+	var sb := StyleBoxTexture.new()
+	sb.texture = _btn_tex
+	var mx := 55 if compact else 80
+	var my := 26 if compact else 42
+	sb.set_texture_margin(SIDE_LEFT, mx)
+	sb.set_texture_margin(SIDE_RIGHT, mx)
+	sb.set_texture_margin(SIDE_TOP, my)
+	sb.set_texture_margin(SIDE_BOTTOM, my)
+	sb.modulate_color = mod
+	return sb
 
 func _btn(parent: Node, text: String, size: Vector2, accent := false) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size = size
 	b.add_theme_font_size_override("font_size", 17)
+	_apply_flat_style(b, accent)
+	parent.add_child(b)
+	return b
+
+## Flat StyleBoxFlat button look — used by the lobby/join controls and as the
+## fallback for HUD buttons when the button art hasn't imported.
+func _apply_flat_style(b: Button, accent := false) -> void:
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = Color(0.13, 0.16, 0.2)
 	normal.border_color = ACCENT if accent else Color(0.28, 0.33, 0.4)
@@ -112,8 +262,6 @@ func _btn(parent: Node, text: String, size: Vector2, accent := false) -> Button:
 		b.add_theme_color_override("font_color", ACCENT)
 		b.add_theme_color_override("font_hover_color", ACCENT.lightened(0.3))
 	b.add_theme_color_override("font_disabled_color", Color(0.4, 0.43, 0.48))
-	parent.add_child(b)
-	return b
 
 func _panel_style(selected: bool) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
@@ -142,35 +290,60 @@ func _centered(parent: Control, text: String, y: float, font_size: int, color: C
 # --- Title screen ---
 
 func _build_title() -> void:
-	_title_screen = _screen()
-	_centered(_title_screen, "BASE DEFENSE", _h * 0.10, 52)
-	_centered(_title_screen, "— hold the line through 100 waves —", _h * 0.235, 16, TEXT_DIM)
+	_title_screen = _screen(0.22)
+	var lx := _w * 0.06
 
+	# Title block, upper-left over the battlefield art.
+	var title := _label(_title_screen, "BASE DEFENSE", 62, TITLE_GOLD)
+	title.position = Vector2(lx, _h * 0.09)
+	title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	title.add_theme_constant_override("outline_size", 8)
+	var sub := _label(_title_screen, "HOLD THE LINE  //  100 WAVES", 16, Color(0.75, 0.8, 0.85))
+	sub.position = Vector2(lx + 4, _h * 0.09 + 78)
+	sub.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	sub.add_theme_constant_override("outline_size", 4)
+
+	# Primary command stack (left), styled like the mockup's big HUD buttons.
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 10)
-	col.position = Vector2(_w / 2.0 - 140, _h * 0.34)
+	col.add_theme_constant_override("separation", 14)
+	col.position = Vector2(lx, _h * 0.30)
 	_title_screen.add_child(col)
-	var size := Vector2(280, 44)
-	_btn(col, "PLAY SOLO", size, true).pressed.connect(_on_solo_pressed)
-	_btn(col, "HOST ONLINE GAME", size).pressed.connect(_on_host_pressed)
-	_btn(col, "JOIN GAME", size).pressed.connect(_on_join_pressed)
-	_btn(col, "QUIT", size).pressed.connect(func(): get_tree().quit())
+	var big := Vector2(468, 92)
+	_hud_button(col, "SOLO", "SINGLE COMMANDER", big).pressed.connect(_on_solo_pressed)
+	_hud_button(col, "HOST", "OPEN A SQUAD LOBBY", big).pressed.connect(_on_host_pressed)
+	_hud_button(col, "JOIN", "FIND A SQUAD", big).pressed.connect(_on_join_pressed)
+
+	# Secondary row (Settings placeholder + Exit) under the stack.
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	col.add_child(row)
+	var small := Vector2(228, 66)
+	_hud_button(row, "SETTINGS", "", small, true).pressed.connect(_on_settings_pressed)
+	_hud_button(row, "EXIT", "", small, true).pressed.connect(func(): get_tree().quit())
 
 	# Update notification — hidden until check_for_updates finds a newer release.
-	_update_btn = _btn(_title_screen, "", Vector2(400, 40), true)
-	_update_btn.position = Vector2(_w / 2.0 - 200, _h * 0.68)
+	_update_btn = _btn(_title_screen, "", Vector2(468, 40), true)
+	_update_btn.position = Vector2(lx, _h * 0.30 + 92 * 3 + 14 * 2 + 66 + 22)
 	_update_btn.visible = false
 	_update_btn.pressed.connect(_on_update_pressed)
 
-	_error_label = _centered(_title_screen, "", _h * 0.80, 15, Color(0.95, 0.45, 0.4))
-	_steam_label = _centered(_title_screen, "", _h * 0.90, 13, TEXT_DIM)
+	# Error + Steam status, bottom-left status strip.
+	_error_label = _label(_title_screen, "", 15, Color(0.95, 0.45, 0.4))
+	_error_label.position = Vector2(lx, _h - 78)
+	_error_label.size = Vector2(_w * 0.55, 22)
+
+	_steam_label = _label(_title_screen, "", 13, TEXT_DIM)
+	_steam_label.position = Vector2(lx, _h - 48)
+	_steam_label.size = Vector2(_w * 0.7, 20)
+	_steam_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_steam_label.add_theme_constant_override("outline_size", 4)
 	if Net.steam_ok:
-		_steam_label.text = "Steam: online as %s — lobbies enabled" % Net.steam_name
+		_steam_label.text = "SECURECOM: ONLINE as %s  //  lobbies enabled" % Net.steam_name
 	else:
-		_steam_label.text = "Steam not detected — hosting/joining runs over LAN (direct IP)"
+		_steam_label.text = "SECURECOM: Steam not detected  //  hosting/joining runs over LAN (direct IP)"
 
 	_version_label = _label(_title_screen, "v" + Updater.current_version, 12, TEXT_DIM)
-	_version_label.position = Vector2(12, _h - 26)
+	_version_label.position = Vector2(_w - 70, _h - 26)
 
 func _on_update_available(version: String, _notes: String) -> void:
 	if _update_btn == null:
@@ -202,6 +375,10 @@ func _on_update_failed(message: String) -> void:
 	if _error_label != null:
 		_error_label.text = message
 
+func _on_settings_pressed() -> void:
+	# Placeholder until there's a settings screen to open.
+	_error_label.text = "Settings — coming soon."
+
 func _on_solo_pressed() -> void:
 	_solo = true
 	_show(_lobby_screen)
@@ -226,7 +403,7 @@ func _on_join_pressed() -> void:
 # --- Lobby screen (also used for solo mission prep) ---
 
 func _build_lobby() -> void:
-	_lobby_screen = _screen()
+	_lobby_screen = _screen(0.62)
 	_lobby_title = _centered(_lobby_screen, "MISSION PREP", _h * 0.045, 34)
 	_lobby_context = _centered(_lobby_screen, "", _h * 0.125, 14, TEXT_DIM)
 
@@ -356,7 +533,7 @@ func _on_leave_pressed() -> void:
 # --- Join screen ---
 
 func _build_join() -> void:
-	_join_screen = _screen()
+	_join_screen = _screen(0.62)
 	_centered(_join_screen, "JOIN GAME", _h * 0.05, 34)
 	_join_status = _centered(_join_screen, "", _h * 0.14, 14, TEXT_DIM)
 
