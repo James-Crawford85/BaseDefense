@@ -18,8 +18,11 @@ var _last_played: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS  # shop/menu sounds while paused
+	var sfx_bus := AudioServer.get_bus_index("SFX")
 	for i in range(VOICES):
 		var p := AudioStreamPlayer.new()
+		if sfx_bus != -1:
+			p.bus = "SFX"  # so the Settings "Game Sounds" slider controls these
 		add_child(p)
 		_players.append(p)
 	_build_all()

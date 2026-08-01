@@ -25,6 +25,7 @@ var _h: float
 var _title_screen: Control
 var _lobby_screen: Control
 var _join_screen: Control
+var _settings_screen: Control
 var _error_label: Label
 var _steam_label: Label
 var _update_btn: Button
@@ -56,6 +57,8 @@ func _ready() -> void:
 	_build_title()
 	_build_lobby()
 	_build_join()
+	_build_settings()
+	Audio.play_menu_music()
 	Net.lobby_updated.connect(_on_lobby_updated)
 	Net.lobby_list_ready.connect(_on_lobby_list)
 	Net.session_error.connect(_on_session_error)
@@ -78,6 +81,8 @@ func close() -> void:
 	_title_screen.visible = false
 	_lobby_screen.visible = false
 	_join_screen.visible = false
+	if _settings_screen != null:
+		_settings_screen.visible = false
 
 func _show(screen: Control) -> void:
 	close()
@@ -327,23 +332,38 @@ func _build_title() -> void:
 	_update_btn.visible = false
 	_update_btn.pressed.connect(_on_update_pressed)
 
-	# Error + Steam status, bottom-left status strip.
+	# Error strip, bottom-left.
 	_error_label = _label(_title_screen, "", 15, Color(0.95, 0.45, 0.4))
 	_error_label.position = Vector2(lx, _h - 78)
 	_error_label.size = Vector2(_w * 0.55, 22)
 
+	# Steam connection status now docks next to the "STEAMCOM:" readout baked
+	# into the background art (top-left corner) instead of the old bottom strip.
+	# Position is estimated from the art at 2752x1536 native res — nudge the
+	# fractions below if it doesn't sit flush against "STEAMCOM:" at runtime.
 	_steam_label = _label(_title_screen, "", 13, TEXT_DIM)
-	_steam_label.position = Vector2(lx, _h - 48)
-	_steam_label.size = Vector2(_w * 0.7, 20)
-	_steam_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	_steam_label.add_theme_constant_override("outline_size", 4)
-	if Net.steam_ok:
-		_steam_label.text = "SECURECOM: ONLINE as %s  //  lobbies enabled" % Net.steam_name
-	else:
-		_steam_label.text = "SECURECOM: Steam not detected  //  hosting/joining runs over LAN (direct IP)"
+	_steam_label.position = Vector2(_w * 0.099, _h * 0.017)
+	_steam_label.size = Vector2(_w * 0.3, 20)
+	_steam_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_steam_label.add_theme_constant_override("outline_size", 3)
+	_refresh_steam_label()
 
 	_version_label = _label(_title_screen, "v" + Updater.current_version, 12, TEXT_DIM)
 	_version_label.position = Vector2(_w - 70, _h - 26)
+
+## Sets the ONLINE/OFFLINE readout next to "STEAMCOM:" in the art. Net.steam_ok
+## is decided synchronously during the Net autoload's _ready() (well before this
+## menu builds), so a one-shot read here is enough — there's no reconnect flow
+## that would change it mid-session.
+func _refresh_steam_label() -> void:
+	if _steam_label == null:
+		return
+	if Net.steam_ok:
+		_steam_label.text = "ONLINE — %s" % Net.steam_name
+		_steam_label.add_theme_color_override("font_color", Color(0.4, 0.95, 0.5))
+	else:
+		_steam_label.text = "OFFLINE — LAN only"
+		_steam_label.add_theme_color_override("font_color", Color(0.95, 0.42, 0.38))
 
 func _on_update_available(version: String, _notes: String) -> void:
 	if _update_btn == null:
@@ -376,8 +396,74 @@ func _on_update_failed(message: String) -> void:
 		_error_label.text = message
 
 func _on_settings_pressed() -> void:
-	# Placeholder until there's a settings screen to open.
-	_error_label.text = "Settings — coming soon."
+	_show(_settings_screen)
+
+# --- Settings screen (Audio for now) ---
+
+func _build_settings() -> void:
+	_settings_screen = _screen(0.62)
+	_centered(_settings_screen, "SETTINGS", _h * 0.06, 34)
+	_centered(_settings_screen, "AUDIO", _h * 0.15, 18, ACCENT)
+
+	var panel := PanelContainer.new()
+	panel.position = Vector2(_w / 2.0 - 320, _h * 0.26)
+	panel.custom_minimum_size = Vector2(640, 0)
+	panel.add_theme_stylebox_override("panel", _panel_style(false))
+	_settings_screen.add_child(panel)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 30)
+	panel.add_child(vb)
+	_add_volume_row(vb, "MUSIC VOLUME", Audio.music_volume, func(v: float): Audio.set_music_volume(v))
+	# Play a short blip while dragging the SFX slider so the level is audible.
+	_add_volume_row(vb, "GAME SOUNDS", Audio.sfx_volume, func(v: float):
+		Audio.set_sfx_volume(v)
+		Sfx.play("buy", 0.0))
+
+	var back := _btn(_settings_screen, "BACK", Vector2(160, 42), true)
+	back.position = Vector2(_w / 2.0 - 80, _h * 0.7)
+	back.pressed.connect(func(): _show(_title_screen))
+
+## A labelled 0-100% volume slider that reports changes through `on_change`.
+func _add_volume_row(parent: Node, label_text: String, initial: float, on_change: Callable) -> void:
+	var row := VBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var top := HBoxContainer.new()
+	top.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var l := _label(top, label_text, 16)
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var val := _label(top, "%d%%" % int(round(initial * 100.0)), 16, ACCENT)
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val.custom_minimum_size = Vector2(70, 0)
+	row.add_child(top)
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = 0.01
+	slider.value = initial
+	slider.custom_minimum_size = Vector2(580, 22)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_slider(slider)
+	slider.value_changed.connect(func(v: float):
+		val.text = "%d%%" % int(round(v * 100.0))
+		on_change.call(v))
+	row.add_child(slider)
+	parent.add_child(row)
+
+func _style_slider(s: HSlider) -> void:
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color(0.07, 0.09, 0.12)
+	track.set_corner_radius_all(4)
+	track.content_margin_top = 5
+	track.content_margin_bottom = 5
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = ACCENT
+	fill.set_corner_radius_all(4)
+	fill.content_margin_top = 5
+	fill.content_margin_bottom = 5
+	s.add_theme_stylebox_override("slider", track)
+	s.add_theme_stylebox_override("grabber_area", fill)
+	s.add_theme_stylebox_override("grabber_area_highlight", fill)
 
 func _on_solo_pressed() -> void:
 	_solo = true

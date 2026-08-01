@@ -268,6 +268,7 @@ func _on_net_game_starting() -> void:
 ## classes: peer_id -> tank class key. Every peer builds the same set of tanks;
 ## each simulates its own and puppets the rest.
 func begin_run(classes: Dictionary) -> void:
+	Audio.stop_music()  # menu theme ends when the fighting starts
 	Game.reset()
 	var pids := classes.keys()
 	pids.sort()

@@ -19,6 +19,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 
 Game="*res://scripts/game.gd"
 Fx="*res://scripts/fx.gd"
+Audio="*res://scripts/audio.gd"
 Sfx="*res://scripts/sfx.gd"
 Net="*res://scripts/net.gd"
 Updater="*res://scripts/updater.gd"
