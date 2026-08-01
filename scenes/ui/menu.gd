@@ -14,11 +14,13 @@ const BTN_TITLE := Color(0.98, 0.92, 0.82)
 
 const BG_PATH := "res://assets/ui/menu_background.jpg"
 const BUTTON_PATH := "res://assets/ui/button_hud.png"
+const LOGO_PATH := "res://assets/ui/logo.png"
 
 var main  # main.gd
 
 var _bg_tex: Texture2D
 var _btn_tex: Texture2D
+var _logo_tex: Texture2D
 var _tank_tex: Dictionary = {}  # class key -> portrait Texture2D
 
 var _w: float
@@ -98,6 +100,8 @@ func _load_art() -> void:
 		_bg_tex = load(BG_PATH)
 	if ResourceLoader.exists(BUTTON_PATH):
 		_btn_tex = load(BUTTON_PATH)
+	if ResourceLoader.exists(LOGO_PATH):
+		_logo_tex = load(LOGO_PATH)
 	for key in CLASS_ORDER:
 		var path := "res://assets/ui/tank_%s.jpg" % key
 		if ResourceLoader.exists(path):
@@ -303,15 +307,26 @@ func _build_title() -> void:
 	_title_screen = _screen(0.22)
 	var lx := _w * 0.06
 
-	# Title block, upper-left over the battlefield art.
-	var title := _label(_title_screen, "STEEL TIDE", 62, TITLE_GOLD)
-	title.position = Vector2(lx, _h * 0.09)
-	title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	title.add_theme_constant_override("outline_size", 8)
-	var sub := _label(_title_screen, "HOLD THE LINE  //  100 WAVES", 16, Color(0.75, 0.8, 0.85))
-	sub.position = Vector2(lx + 4, _h * 0.09 + 78)
-	sub.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	sub.add_theme_constant_override("outline_size", 4)
+	# Logo emblem, top-center over the battlefield art. Falls back to gold text
+	# if the art hasn't imported (headless/smoke).
+	if _logo_tex != null:
+		var logo := TextureRect.new()
+		logo.texture = _logo_tex
+		# expand_mode MUST be set before size, or the default KEEP_SIZE clamps the
+		# control up to the texture's native resolution.
+		logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
+		logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var lw := 190.0
+		var lh := lw * float(_logo_tex.get_height()) / float(_logo_tex.get_width())
+		logo.size = Vector2(lw, lh)
+		logo.position = Vector2(_w / 2.0 - lw / 2.0, _h * 0.01)
+		_title_screen.add_child(logo)
+	else:
+		var title := _label(_title_screen, "STEEL TIDE", 62, TITLE_GOLD)
+		title.position = Vector2(lx, _h * 0.09)
+		title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+		title.add_theme_constant_override("outline_size", 8)
 
 	# Primary command stack (left), styled like the mockup's big HUD buttons.
 	var col := VBoxContainer.new()
