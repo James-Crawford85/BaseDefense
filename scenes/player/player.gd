@@ -46,6 +46,8 @@ var mounts: Array = []
 var _invuln: float = 0.0
 var _dash_cooldown: float = 0.0
 var _dash_time: float = 0.0
+var _time_since_hit: float = 999.0  # drives shield recharge delay
+var _shield_ring: Line2D = null
 
 func setup(key: String) -> void:
 	class_key = key
@@ -81,6 +83,18 @@ func _ready() -> void:
 	shape.shape = circle
 	add_child(shape)
 	_build_hull(data.color)
+
+	# Shield ring: a cyan halo whose opacity tracks the shield fraction.
+	_shield_ring = Line2D.new()
+	_shield_ring.width = 2.5
+	_shield_ring.default_color = Color(0.4, 0.8, 1.0, 0.0)
+	_shield_ring.z_index = 3
+	var rp := PackedVector2Array()
+	for i in range(25):
+		var a := TAU * i / 24.0
+		rp.append(Vector2(cos(a), sin(a)) * 26.0)
+	_shield_ring.points = rp
+	add_child(_shield_ring)
 
 	for slot in data.slots:
 		var mount := WeaponMount.new()
@@ -120,8 +134,14 @@ func _physics_process(delta: float) -> void:
 	_invuln -= delta
 	_dash_cooldown -= delta
 	_dash_time -= delta
-	if Net.is_authority() and regen > 0.0:
-		hp = minf(hp + regen * delta, max_hp)
+	if Net.is_authority():
+		_time_since_hit += delta
+		if regen > 0.0:
+			hp = minf(hp + regen * delta, max_hp)
+		# Shield refills once you've gone shield_recharge_delay seconds unhit.
+		if shield_max > 0.0 and shield < shield_max and _time_since_hit >= shield_recharge_delay:
+			shield = minf(shield_max, shield + shield_max * shield_recharge_rate * delta)
+	_update_shield_ring()
 
 	if not is_local():
 		# Remote tank: follow the owner's broadcast transform.
@@ -157,11 +177,20 @@ func net_transform(pos: Vector2, rot: float) -> void:
 	_net_pos = pos
 	_net_rot = rot
 
-## Snapshot HP mirror on clients (host owns damage/heals).
-func net_set_hp(new_hp: float, new_max: float) -> void:
+## Fades the shield halo with the current shield fraction (runs on every peer).
+func _update_shield_ring() -> void:
+	if _shield_ring == null:
+		return
+	var frac: float = (shield / shield_max) if shield_max > 0.0 else 0.0
+	_shield_ring.default_color = Color(0.4, 0.8, 1.0, 0.55 * frac if frac > 0.01 else 0.0)
+
+## Snapshot HP + shield mirror on clients (host owns damage/heals/recharge).
+func net_set_hp(new_hp: float, new_max: float, new_shield: float = 0.0, new_shield_max: float = 0.0) -> void:
 	if Net.is_authority():
 		return
 	max_hp = new_max
+	shield = new_shield
+	shield_max = new_shield_max
 	if new_hp < hp:
 		Fx.flash(self)
 	hp = new_hp
@@ -249,7 +278,14 @@ func take_damage(amount: float) -> void:
 	if randf() < dodge:
 		Fx.float_text(global_position, "DODGE", Color(0.6, 0.9, 1.0))
 		return
-	hp -= maxf(1.0, amount - armor)
+	_time_since_hit = 0.0  # taking a hit restarts the shield recharge delay
+	var dmg := maxf(1.0, amount - armor)
+	if shield > 0.0:  # the shield layer soaks damage before HP
+		var absorbed := minf(shield, dmg)
+		shield -= absorbed
+		dmg -= absorbed
+	if dmg > 0.0:
+		hp -= dmg
 	_invuln = 0.6
 	Fx.flash(self)
 	Fx.shake(4.0)

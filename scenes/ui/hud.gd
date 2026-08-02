@@ -19,6 +19,8 @@ var _kills_label: Label
 var _message_label: Label
 var _player_fill: ColorRect
 var _player_value: Label
+var _shield_bar_bg: ColorRect
+var _shield_fill: ColorRect
 var _core_fill: ColorRect
 var _core_value: Label
 var _results_overlay: Control
@@ -79,6 +81,18 @@ func _build_hud() -> void:
 	var pbar := _build_bar(Vector2(16, _h - 28), "YOU", Color(0.35, 0.75, 0.95))
 	_player_fill = pbar.fill
 	_player_value = pbar.value
+	# Shield sub-bar, just above the HP bar (hidden when the tank has no shield).
+	_shield_bar_bg = ColorRect.new()
+	_shield_bar_bg.color = Color(0, 0, 0, 0.55)
+	_shield_bar_bg.position = Vector2(16, _h - 35)
+	_shield_bar_bg.size = Vector2(BAR_W, 5)
+	_shield_bar_bg.visible = false
+	add_child(_shield_bar_bg)
+	_shield_fill = ColorRect.new()
+	_shield_fill.color = Color(0.4, 0.8, 1.0)
+	_shield_fill.position = Vector2(1, 1)
+	_shield_fill.size = Vector2(0, 3)
+	_shield_bar_bg.add_child(_shield_fill)
 	var cbar := _build_bar(Vector2(_w - BAR_W - 16, _h - 28), "CORE", Color(0.3, 0.85, 0.8))
 	_core_fill = cbar.fill
 	_core_value = cbar.value
@@ -336,6 +350,9 @@ func _process(_delta: float) -> void:
 	if p != null and is_instance_valid(p):
 		_player_fill.size.x = (BAR_W - 4) * clampf(p.hp / p.max_hp, 0.0, 1.0)
 		_player_value.text = "%d / %d" % [ceili(p.hp), int(p.max_hp)]
+		_shield_bar_bg.visible = p.shield_max > 0.0
+		if p.shield_max > 0.0:
+			_shield_fill.size.x = (BAR_W - 2) * clampf(p.shield / p.shield_max, 0.0, 1.0)
 	var c: FortressCore = main.core
 	if c != null and is_instance_valid(c):
 		_core_fill.size.x = (BAR_W - 4) * clampf(c.hp / c.max_hp, 0.0, 1.0)

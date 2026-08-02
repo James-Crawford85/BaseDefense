@@ -677,7 +677,7 @@ func _broadcast_snapshot() -> void:
 	for pid in players:
 		var p: Player = players[pid]
 		if is_instance_valid(p):
-			p_data[pid] = [p.hp, p.max_hp]
+			p_data[pid] = [p.hp, p.max_hp, p.shield, p.shield_max]
 	var w_data: Array = []
 	for w in walls:
 		w_data.append([w.hp, w.max_hp, w.destroyed])
@@ -715,7 +715,7 @@ func cl_snapshot(snap: Dictionary) -> void:
 		var p: Player = players.get(pid)
 		if p != null and is_instance_valid(p):
 			var pd: Array = snap.p[pid]
-			p.net_set_hp(pd[0], pd[1])
+			p.net_set_hp(pd[0], pd[1], pd[2], pd[3])
 	for i in range(mini(walls.size(), snap.w.size())):
 		var wd: Array = snap.w[i]
 		walls[i].net_apply(wd[0], wd[1], wd[2])
