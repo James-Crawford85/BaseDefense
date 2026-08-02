@@ -31,6 +31,9 @@ var _levelup_buttons: Array = []
 var _levelup_ids: Array = []
 var _tower_btns: Array = []   # [{btn, cost, key}] for the live build sidebar
 var _build_hint: Label
+var _stats_panel: PanelContainer
+var _stats_labels: Dictionary = {}
+var _stats_visible := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -40,6 +43,7 @@ func _ready() -> void:
 	_h = vs.y
 	_build_hud()
 	_build_towerbar()
+	_build_stats_panel()
 	_build_shop()
 	_build_results()
 	_build_levelup()
@@ -52,6 +56,7 @@ func _build_hud() -> void:
 	_wave_label.size = Vector2(300, 30)
 	_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_kills_label = _label(self, "Kills: 0", Vector2(_w - 100, 12), 16)
+	_label(self, "[Tab] Stats", Vector2(_w - 100, 34), 12, Color(0.6, 0.64, 0.7))
 
 	_level_label = _label(self, "Lv 1", Vector2(16, 36), 13, Color(0.5, 0.95, 0.55))
 	var xpbg := ColorRect.new()
@@ -123,6 +128,88 @@ func _style_tower_btn(b: Button, accent: Color) -> void:
 	b.add_theme_stylebox_override("disabled", disabled)
 	b.add_theme_color_override("font_color", accent.lightened(0.4))
 	b.add_theme_color_override("font_disabled_color", Color(0.45, 0.47, 0.5))
+
+## Toggled with Tab: a live readout of every current stat so players can make
+## informed upgrade choices. Grouped Main / Sub like docs/stats.md.
+func _build_stats_panel() -> void:
+	_stats_panel = PanelContainer.new()
+	_stats_panel.position = Vector2(_w - 314, 56)
+	_stats_panel.custom_minimum_size = Vector2(298, 0)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.08, 0.11, 0.93)
+	sb.border_color = Color(0.3, 0.35, 0.42)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(6)
+	sb.set_content_margin_all(12)
+	_stats_panel.add_theme_stylebox_override("panel", sb)
+	_stats_panel.visible = false
+	add_child(_stats_panel)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 3)
+	_stats_panel.add_child(vb)
+
+	_stats_header(vb, "MAIN")
+	_stat_row(vb, "hp", "Max HP")
+	_stat_row(vb, "damage", "Damage")
+	_stat_row(vb, "firerate", "Fire Rate")
+	_stat_row(vb, "range", "Range")
+	_stat_row(vb, "speed", "Move Speed")
+	_stat_row(vb, "armor", "Armor")
+	_stats_header(vb, "SUB")
+	_stat_row(vb, "crit", "Crit Chance")
+	_stat_row(vb, "dodge", "Dodge")
+	_stat_row(vb, "regen", "HP Regen")
+	_stat_row(vb, "lifesteal", "Lifesteal")
+	_stat_row(vb, "greed", "Greed")
+	_stat_row(vb, "engineering", "Engineering")
+	_stat_row(vb, "pickup", "Pickup Radius")
+	_stat_row(vb, "turn", "Turn Rate")
+	_stat_row(vb, "projspeed", "Projectile Speed")
+	_stat_row(vb, "aoe", "AoE Radius")
+	_stat_row(vb, "shield", "Shield")
+	_stat_row(vb, "shieldrate", "Shield Recharge")
+	_stat_row(vb, "shielddelay", "Shield Delay")
+
+func _stats_header(parent: Node, text: String) -> void:
+	var l := _label(parent, text, Vector2.ZERO, 12, Color(1.0, 0.82, 0.35))
+	l.add_theme_constant_override("line_spacing", 2)
+
+func _stat_row(parent: Node, id: String, name: String) -> void:
+	var row := HBoxContainer.new()
+	var n := Label.new()
+	n.text = name
+	n.add_theme_font_size_override("font_size", 13)
+	n.add_theme_color_override("font_color", Color(0.72, 0.76, 0.82))
+	n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(n)
+	var v := Label.new()
+	v.text = "-"
+	v.add_theme_font_size_override("font_size", 13)
+	v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(v)
+	parent.add_child(row)
+	_stats_labels[id] = v
+
+func _refresh_stats(p: Player) -> void:
+	_stats_labels["hp"].text = "%d / %d" % [ceili(p.hp), int(p.max_hp)]
+	_stats_labels["damage"].text = "x%.2f" % p.damage_mult
+	_stats_labels["firerate"].text = "x%.2f" % p.fire_rate_mult
+	_stats_labels["range"].text = "x%.2f" % p.range_mult
+	_stats_labels["speed"].text = "%d" % int(p.move_speed)
+	_stats_labels["armor"].text = "%d" % int(p.armor)
+	_stats_labels["crit"].text = "%d%%" % roundi(p.crit_chance * 100.0)
+	_stats_labels["dodge"].text = "%d%%" % roundi(p.dodge * 100.0)
+	_stats_labels["regen"].text = "%.1f/s" % p.regen
+	_stats_labels["lifesteal"].text = "%.1f/kill" % p.kill_heal
+	_stats_labels["greed"].text = "+%d%%" % roundi((p.greed - 1.0) * 100.0)
+	_stats_labels["engineering"].text = "%d" % int(p.engineering)
+	_stats_labels["pickup"].text = "%d" % int(p.pickup_radius)
+	_stats_labels["turn"].text = "%.1f" % p.turn_speed
+	_stats_labels["projspeed"].text = "x%.2f" % p.proj_speed_mult
+	_stats_labels["aoe"].text = "x%.2f" % p.aoe_mult
+	_stats_labels["shield"].text = ("%d / %d" % [int(p.shield), int(p.shield_max)]) if p.shield_max > 0.0 else "-"
+	_stats_labels["shieldrate"].text = "%d%%/s" % roundi(p.shield_recharge_rate * 100.0)
+	_stats_labels["shielddelay"].text = "%.1fs" % p.shield_recharge_delay
 
 func _build_bar(pos: Vector2, caption: String, fill_color: Color) -> Dictionary:
 	var bg := ColorRect.new()
@@ -233,8 +320,19 @@ func _centered_label(parent: Control, text: String, y: float, font_size: int, co
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return l
 
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_TAB:
+		_stats_visible = not _stats_visible
+		get_viewport().set_input_as_handled()  # don't let Tab drive focus navigation
+
 func _process(_delta: float) -> void:
 	var p: Player = main.player
+	# Stats readout: visible while toggled on and we have a live tank to read.
+	var show_stats: bool = _stats_visible and p != null and is_instance_valid(p) \
+		and (main.state == main.State.WAVE or main.state == main.State.INTERMISSION)
+	_stats_panel.visible = show_stats
+	if show_stats:
+		_refresh_stats(p)
 	if p != null and is_instance_valid(p):
 		_player_fill.size.x = (BAR_W - 4) * clampf(p.hp / p.max_hp, 0.0, 1.0)
 		_player_value.text = "%d / %d" % [ceili(p.hp), int(p.max_hp)]

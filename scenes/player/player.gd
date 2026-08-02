@@ -33,6 +33,13 @@ var dodge := 0.0         # chance to ignore a hit entirely (cap 50%)
 var engineering := 0.0   # towers YOU deploy: +15% damage / +20% HP per point
 var kill_heal := 0.0     # "salvage": HP restored on every enemy kill
 var greed := 1.0         # gold pickup multiplier
+var proj_speed_mult := 1.0  # shot travel speed (hitscan/flame ignore this)
+var aoe_mult := 1.0         # splash radius multiplier on explosive weapons
+# Regenerating overhealth layer (see docs/stats.md). shield_max 0 = no shield.
+var shield := 0.0
+var shield_max := 0.0
+var shield_recharge_rate := 0.25  # fraction of max restored per second
+var shield_recharge_delay := 3.0  # seconds after a hit before recharge begins
 
 var mounts: Array = []
 
@@ -57,6 +64,16 @@ func _ready() -> void:
 	armor = data.armor
 	regen = data.regen
 	pickup_radius = data.pickup_radius
+	# Class seeds for the newer stats (default to neutral if a class omits them).
+	turn_speed = data.get("turn_speed", turn_speed)
+	crit_chance = data.get("crit_chance", crit_chance)
+	dodge = data.get("dodge", dodge)
+	engineering = data.get("engineering", engineering)
+	greed = data.get("greed", greed)
+	shield_max = data.get("shield", 0.0)
+	shield = shield_max
+	shield_recharge_rate = data.get("shield_recharge_rate", shield_recharge_rate)
+	shield_recharge_delay = data.get("shield_recharge_delay", shield_recharge_delay)
 
 	var shape := CollisionShape2D.new()
 	var circle := CircleShape2D.new()

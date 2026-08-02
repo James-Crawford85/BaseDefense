@@ -8,6 +8,7 @@ const CLASSES: Dictionary = {
 		"label": "Assault", "color": Color(0.45, 0.55, 0.35),
 		"hp": 100.0, "speed": 240.0, "damage_mult": 1.1, "fire_rate_mult": 1.0,
 		"range_mult": 1.0, "armor": 0.0, "regen": 0.0, "pickup_radius": 90.0,
+		"turn_speed": 2.8, "crit_chance": 0.05,
 		"start_weapon": "autocannon",
 		"blurb": "Balanced hull. +10% damage.",
 		"slots": [
@@ -19,7 +20,9 @@ const CLASSES: Dictionary = {
 	"heavy": {
 		"label": "Heavy", "color": Color(0.4, 0.45, 0.55),
 		"hp": 150.0, "speed": 185.0, "damage_mult": 1.0, "fire_rate_mult": 0.95,
-		"range_mult": 1.0, "armor": 2.0, "regen": 0.0, "pickup_radius": 80.0,
+		"range_mult": 1.0, "armor": 3.0, "regen": 0.0, "pickup_radius": 80.0,
+		"turn_speed": 1.8, "engineering": 1.0,
+		"shield": 40.0, "shield_recharge_rate": 0.33, "shield_recharge_delay": 2.5,
 		"start_weapon": "cannon",
 		"blurb": "Slow fortress. 2 armor, 4 weapon slots.",
 		"slots": [
@@ -33,6 +36,7 @@ const CLASSES: Dictionary = {
 		"label": "Scout", "color": Color(0.75, 0.65, 0.35),
 		"hp": 70.0, "speed": 300.0, "damage_mult": 1.0, "fire_rate_mult": 1.15,
 		"range_mult": 1.0, "armor": 0.0, "regen": 0.0, "pickup_radius": 140.0,
+		"turn_speed": 3.6, "crit_chance": 0.12, "dodge": 0.08, "greed": 1.2,
 		"start_weapon": "machinegun",
 		"blurb": "Fast and greedy. +15% attack speed,\nbig pickup radius, only 2 slots.",
 		"slots": [
