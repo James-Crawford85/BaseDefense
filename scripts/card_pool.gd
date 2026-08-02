@@ -56,11 +56,7 @@ static func draw_cards(count: int, wave: int, player: Player, main) -> Array:
 			"title": s.label + MAG_SUFFIX[mag - 1],
 			"desc": s.desc if mag == 1 else "%s — x%d" % [s.desc, mag],
 			"cost": (14 + wave * 3) * mag, "weight": 2, "tier": mag})
-	for key in TowerData.TYPES:
-		var t: Dictionary = TowerData.TYPES[key]
-		pool.append({"id": "t_" + key, "kind": "tower", "key": key,
-			"title": "%s Tower Kit" % t.label, "desc": "Adds a kit to your stock — press E in the field to deploy",
-			"cost": int(t.cost) + wave * 3, "weight": 2, "tier": 2})
+	# Towers are no longer bought here — they're built live from the field sidebar.
 	pool.append({"id": "reinforce", "kind": "reinforce", "key": "",
 		"title": "Reinforce Walls", "desc": "All wall segments +30% HP",
 		"cost": 40 + wave * 4, "weight": 2, "tier": 1})

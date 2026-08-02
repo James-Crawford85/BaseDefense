@@ -17,6 +17,7 @@ const GAP_SLOTS: Array = [2, 5]
 const INTERMISSION_TIME := 30.0
 const PULL_TIME := 1.5  # length of the end-of-group resource sweep before the shop
 const PICKUP_MERGE_RADIUS := 46.0  # gold dropped this close to a coin merges into it
+const TOWER_BUILD_TIME := 4.0  # seconds a placed tower spends vulnerable before it fires
 const FINAL_WAVE := WaveData.FINAL_WAVE
 const TURRET_OFFSET := Vector2(46, 0)  # "just ahead" = toward the enemy side
 const SNAPSHOT_INTERVAL := 0.08
@@ -31,7 +32,8 @@ var core_pos: Vector2
 var state: State = State.MENU
 var wave_index: int = -1
 var intermission_left: float = 0.0
-var tower_kits: Array = []  # tower type keys bought in the shop, deployed with E
+var _placing_type := ""     # tower type armed for placement from the sidebar ("" = none)
+var _ghost: Node2D = null    # placement preview that follows the cursor
 
 var player: Player          # THIS peer's tank
 var players: Dictionary = {}  # peer_id -> Player (all tanks, every peer)
@@ -226,14 +228,15 @@ func _process(delta: float) -> void:
 		else:
 			intermission_left -= delta  # local tick between snapshot corrections
 		hud.set_countdown(intermission_left)
-	# Real-time tower deployment: E drops the next bought kit at your position.
-	if state == State.WAVE or state == State.INTERMISSION:
-		if player != null and is_instance_valid(player) and player.hp > 0.0 \
-				and Input.is_action_just_pressed("interact") and not tower_kits.is_empty():
-			if Net.active() and not Net.is_authority():
-				rpc_id(1, &"srv_deploy")
-			else:
-				_try_deploy(player)
+	# Tower placement: while a build is armed from the sidebar, a ghost follows the
+	# cursor and colours by whether that spot is a legal build site.
+	if _placing_type != "":
+		if state != State.WAVE and state != State.INTERMISSION:
+			cancel_placement()  # leaving combat drops a pending build
+		elif is_instance_valid(_ghost):
+			var mp := get_global_mouse_position()
+			_ghost.global_position = mp
+			_ghost.modulate = Color(0.4, 1.0, 0.5, 0.7) if can_place_at(mp) else Color(1.0, 0.4, 0.4, 0.7)
 	# Group level-up: host pauses everyone and waits for all picks (HUD overlay
 	# opens from Game.pending_picks on each peer).
 	if Net.hosting() and (state == State.WAVE or state == State.INTERMISSION):
@@ -250,16 +253,85 @@ func _physics_process(delta: float) -> void:
 			_snap_accum = 0.0
 			_broadcast_snapshot()
 
-func _try_deploy(who: Player) -> void:
-	if tower_kits.is_empty() or who == null or not is_instance_valid(who):
+# --- Tower building (live, from the HUD sidebar) ---
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _placing_type == "":
 		return
-	var pos := who.global_position + TURRET_OFFSET
-	if can_place_at(pos):
-		place_turret_at(tower_kits.pop_front(), pos, who)
-		Sfx.play("buy", 0.0)
-	else:
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			_try_place_at(get_global_mouse_position())
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			cancel_placement()
+		get_viewport().set_input_as_handled()
+
+## Called by the HUD sidebar: arm placement for a tower type if it's affordable.
+func begin_placement(type_key: String) -> void:
+	if not TowerData.TYPES.has(type_key):
+		return
+	if state != State.WAVE and state != State.INTERMISSION:
+		return
+	if Game.money < int(TowerData.TYPES[type_key].cost):
 		Sfx.play("deny", 0.0)
-		Fx.float_text(who.global_position, "Can't deploy here!", Color(1, 0.5, 0.4))
+		return
+	_placing_type = type_key
+	_spawn_ghost(type_key)
+
+func cancel_placement() -> void:
+	_placing_type = ""
+	if is_instance_valid(_ghost):
+		_ghost.queue_free()
+	_ghost = null
+
+func _spawn_ghost(type_key: String) -> void:
+	if is_instance_valid(_ghost):
+		_ghost.queue_free()
+	var t: Dictionary = TowerData.TYPES[type_key]
+	_ghost = Node2D.new()
+	_ghost.z_index = 40
+	var hs: float = t.body_size / 2.0
+	var body := Polygon2D.new()
+	body.polygon = PackedVector2Array([Vector2(-hs, -hs), Vector2(hs, -hs), Vector2(hs, hs), Vector2(-hs, hs)])
+	body.color = Color(1, 1, 1, 0.6)
+	_ghost.add_child(body)
+	var ring := Line2D.new()  # shows the tower's range so placement is informed
+	ring.width = 2.0
+	ring.default_color = Color(1, 1, 1, 0.5)
+	var pts := PackedVector2Array()
+	for i in range(33):
+		var a := TAU * i / 32.0
+		pts.append(Vector2(cos(a), sin(a)) * float(t.range))
+	ring.points = pts
+	_ghost.add_child(ring)
+	entity_layer.add_child(_ghost)
+
+## Field click while placing: commit the build at the cursor if the spot is legal.
+func _try_place_at(pos: Vector2) -> void:
+	if _placing_type == "":
+		return
+	if not can_place_at(pos):
+		Sfx.play("deny", 0.0)
+		Fx.float_text(pos, "Can't build here!", Color(1, 0.5, 0.4))
+		return
+	request_build(_placing_type, pos)
+	cancel_placement()
+
+## Local intent to build; the authority validates gold + spot and raises it.
+func request_build(type_key: String, pos: Vector2) -> void:
+	if Net.active() and not Net.is_authority():
+		rpc_id(1, &"srv_build", type_key, pos)
+	else:
+		_do_build(type_key, pos, Net.my_id())
+
+func _do_build(type_key: String, pos: Vector2, buyer: int) -> void:
+	if not TowerData.TYPES.has(type_key) or not can_place_at(pos):
+		_sfx_for(buyer, "deny")
+		return
+	if not Game.spend(int(TowerData.TYPES[type_key].cost)):
+		_sfx_for(buyer, "deny")
+		return
+	_sfx_for(buyer, "buy")
+	place_turret_at(type_key, pos, players.get(buyer), TOWER_BUILD_TIME)
 
 # --- Run flow ---
 
@@ -420,29 +492,25 @@ func rebuild_walls() -> void:
 func can_place_at(pos: Vector2) -> bool:
 	return pos.x > wall_x + 60.0 and pos.x < arena_w - 60.0 and pos.y > 40.0 and pos.y < arena_h - 40.0
 
-func can_place_turret() -> bool:
-	return player != null and is_instance_valid(player) and can_place_at(player.global_position + TURRET_OFFSET)
-
-func add_tower_kit(type_key: String) -> void:
-	tower_kits.append(type_key)
-	Fx.float_text(Vector2(arena_w / 2.0 - 60, arena_h * 0.5),
-		"%s kit — press E to deploy" % TowerData.TYPES[type_key].label, Color(0.5, 0.9, 1.0))
-
-## Deploy engineer bonuses come from whoever placed the tower.
-func place_turret_at(type_key: String, pos: Vector2, owner_tank: Player = null) -> void:
+## Engineer bonuses come from whoever placed the tower. `build_time` > 0 raises it
+## in the vulnerable under-construction state before it starts firing.
+func place_turret_at(type_key: String, pos: Vector2, owner_tank: Player = null, build_time: float = 0.0) -> void:
 	var t := Turret.new()
 	t.setup(type_key)
 	if owner_tank != null and is_instance_valid(owner_tank):
 		t.eng_damage = 1.0 + 0.15 * owner_tank.engineering
 		t.eng_hp = 1.0 + 0.2 * owner_tank.engineering
+	t.building = build_time > 0.0
+	t.build_left = build_time
+	t._build_total = build_time
 	t.position = pos
 	t.net_id = _next_net_id
 	_next_net_id += 1
 	_turrets[t.net_id] = t
 	entity_layer.add_child(t)
 	if Net.hosting():
-		rpc(&"cl_turret_spawn", t.net_id, type_key, pos, t.eng_damage, t.eng_hp)
-	Fx.float_text(pos, "%s tower online" % TowerData.TYPES[type_key].label, Color(0.5, 0.9, 1.0))
+		rpc(&"cl_turret_spawn", t.net_id, type_key, pos, t.eng_damage, t.eng_hp, build_time)
+	Fx.float_text(pos, "Building %s..." % TowerData.TYPES[type_key].label, Color(0.5, 0.9, 1.0))
 
 ## Shop purchase, executed by the authority for `buyer` (a peer id).
 func execute_buy(buyer: int, index: int) -> void:
@@ -470,8 +538,6 @@ func execute_buy(buyer: int, index: int) -> void:
 				tank.apply_stat(card.key, count)
 			if Net.hosting():
 				rpc(&"cl_stat", buyer, card.key, count)
-		"tower":
-			add_tower_kit(card.key)
 		"reinforce":
 			reinforce_walls()
 		"rebuild":
@@ -620,7 +686,6 @@ func _broadcast_snapshot() -> void:
 		"c": core.hp,
 		"g": [Game.money, Game.xp, Game.level, Game.kills],
 		"s": [state, wave_index, intermission_left],
-		"kits": tower_kits,
 	})
 
 @rpc("authority", "unreliable")
@@ -632,7 +697,6 @@ func cl_snapshot(snap: Dictionary) -> void:
 	wave_index = int(snap.s[1])
 	intermission_left = float(snap.s[2])
 	Game.net_apply(snap.g[0], snap.g[1], snap.g[2], snap.g[3])
-	tower_kits = snap.kits
 	for id in snap.e:
 		var e: Enemy = _enemies.get(id)
 		if e != null and is_instance_valid(e):
@@ -696,12 +760,15 @@ func cl_pickup_taken(id: int, kind: String) -> void:
 	Sfx.play("pickup_gold" if kind == "gold" else "pickup_xp")
 
 @rpc("authority", "reliable")
-func cl_turret_spawn(id: int, type: String, pos: Vector2, eng_damage: float, eng_hp: float) -> void:
+func cl_turret_spawn(id: int, type: String, pos: Vector2, eng_damage: float, eng_hp: float, build_time: float = 0.0) -> void:
 	var t := Turret.new()
 	t.puppet = true
 	t.setup(type)
 	t.eng_damage = eng_damage
 	t.eng_hp = eng_hp
+	t.building = build_time > 0.0
+	t.build_left = build_time
+	t._build_total = build_time
 	t.position = pos
 	t.net_id = id
 	_turrets[id] = t
@@ -796,10 +863,10 @@ func net_player_pos(pos: Vector2, rot: float) -> void:
 # --- Client requests (host validates) ---
 
 @rpc("any_peer", "reliable")
-func srv_deploy() -> void:
+func srv_build(type_key: String, pos: Vector2) -> void:
 	if not Net.hosting():
 		return
-	_try_deploy(players.get(multiplayer.get_remote_sender_id()))
+	_do_build(type_key, pos, multiplayer.get_remote_sender_id())
 
 @rpc("any_peer", "reliable")
 func srv_buy(index: int) -> void:

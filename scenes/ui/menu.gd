@@ -636,7 +636,7 @@ func _refresh_lobby() -> void:
 
 	if _solo or not Net.active():
 		_lobby_title.text = "MISSION PREP"
-		_lobby_context.text = "Pick your tank and roll out. WASD to drive · Space to boost · E deploys tower kits."
+		_lobby_context.text = "Pick your tank and roll out. WASD to drive · Space to boost · build turrets from the sidebar."
 		_ready_btn.visible = false
 		_start_btn.disabled = false
 		_start_btn.text = "ROLL OUT"

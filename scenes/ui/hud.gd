@@ -29,7 +29,8 @@ var _levelup_overlay: Control
 var _levelup_sub: Label
 var _levelup_buttons: Array = []
 var _levelup_ids: Array = []
-var _kits_label: Label
+var _tower_btns: Array = []   # [{btn, cost, key}] for the live build sidebar
+var _build_hint: Label
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -38,6 +39,7 @@ func _ready() -> void:
 	_w = vs.x
 	_h = vs.y
 	_build_hud()
+	_build_towerbar()
 	_build_shop()
 	_build_results()
 	_build_levelup()
@@ -76,10 +78,51 @@ func _build_hud() -> void:
 	_core_fill = cbar.fill
 	_core_value = cbar.value
 
-	_kits_label = _label(self, "", Vector2(0, _h - 26), 14, Color(0.5, 0.9, 1.0))
-	_kits_label.size = Vector2(_w, 20)
-	_kits_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_kits_label.visible = false
+	_build_hint = _label(self, "", Vector2(0, _h - 48), 15, Color(0.6, 0.95, 1.0))
+	_build_hint.size = Vector2(_w, 20)
+	_build_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_build_hint.visible = false
+
+## Live RTS build sidebar down the left edge: click a tower, then click the
+## field to place it. Buttons dim when you can't afford them (see _process).
+func _build_towerbar() -> void:
+	var header := _label(self, "BUILD", Vector2(10, _h * 0.30 - 22), 13, Color(0.7, 0.8, 0.9))
+	header.set_meta("towerbar", true)
+	var keys: Array = TowerData.TYPES.keys()
+	for i in range(keys.size()):
+		var key: String = keys[i]
+		var t: Dictionary = TowerData.TYPES[key]
+		var b := Button.new()
+		b.text = "%s\n$%d" % [t.label, int(t.cost)]
+		b.position = Vector2(10, _h * 0.30 + i * 60)
+		b.custom_minimum_size = Vector2(118, 52)
+		b.size = Vector2(118, 52)
+		b.focus_mode = Control.FOCUS_NONE
+		b.add_theme_font_size_override("font_size", 13)
+		_style_tower_btn(b, t.color)
+		b.pressed.connect(func(): main.begin_placement(key))
+		add_child(b)
+		_tower_btns.append({"btn": b, "cost": int(t.cost), "header": header})
+
+func _style_tower_btn(b: Button, accent: Color) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.09, 0.11, 0.14, 0.92)
+	normal.border_color = accent
+	normal.set_border_width_all(1)
+	normal.set_corner_radius_all(5)
+	normal.set_content_margin_all(4)
+	var hover := normal.duplicate()
+	hover.bg_color = Color(0.15, 0.18, 0.22, 0.95)
+	hover.set_border_width_all(2)
+	var disabled := normal.duplicate()
+	disabled.bg_color = Color(0.08, 0.09, 0.1, 0.7)
+	disabled.border_color = Color(0.3, 0.32, 0.36)
+	b.add_theme_stylebox_override("normal", normal)
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", hover.duplicate())
+	b.add_theme_stylebox_override("disabled", disabled)
+	b.add_theme_color_override("font_color", accent.lightened(0.4))
+	b.add_theme_color_override("font_disabled_color", Color(0.45, 0.47, 0.5))
 
 func _build_bar(pos: Vector2, caption: String, fill_color: Color) -> Dictionary:
 	var bg := ColorRect.new()
@@ -203,11 +246,16 @@ func _process(_delta: float) -> void:
 	_level_label.text = "Lv %d" % Game.level
 	_xp_fill.size.x = _xp_bar_w * clampf(float(Game.xp) / float(Game.xp_needed()), 0.0, 1.0)
 
-	var kits: Array = main.tower_kits
-	_kits_label.visible = not kits.is_empty()
-	if not kits.is_empty():
-		var extra := "" if kits.size() == 1 else " (+%d more queued)" % (kits.size() - 1)
-		_kits_label.text = "[E] Deploy %s Tower%s" % [TowerData.TYPES[kits[0]].label, extra]
+	# Live build sidebar: visible only during a run, buttons dim when unaffordable.
+	var in_run: bool = main.state == main.State.WAVE or main.state == main.State.INTERMISSION
+	for entry in _tower_btns:
+		entry.btn.visible = in_run
+		entry.header.visible = in_run
+		entry.btn.disabled = Game.money < int(entry.cost)
+	var placing: bool = main._placing_type != ""
+	_build_hint.visible = placing
+	if placing:
+		_build_hint.text = "Left-click to build  ·  Right-click to cancel"
 
 	# Level-ups interrupt play: pause and force the pick before continuing.
 	if main.state == main.State.WAVE or main.state == main.State.INTERMISSION:

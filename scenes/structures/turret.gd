@@ -20,6 +20,12 @@ var net_id: int = 0
 ## or takes damage — shots/HP come from the host.
 var puppet := false
 
+## Under-construction: placed but not yet firing, and vulnerable while it builds.
+## Ticks down to activation in _physics_process; enemies can smash it meanwhile.
+var building := false
+var build_left := 0.0
+var _build_total := 0.0
+
 var _cooldown: float = 0.0
 var _bar: HealthBar
 var _cone: Polygon2D
@@ -81,7 +87,18 @@ func _ready() -> void:
 	_bar.position = Vector2(0, s + 12.0)  # below the base; barrels occupy the top
 	add_child(_bar)
 
+	if building:
+		modulate = Color(0.55, 0.75, 1.0, 0.7)  # blueprint tint while under construction
+		_bar.set_health(0.0, 1.0)
+
 func _physics_process(delta: float) -> void:
+	if building:
+		build_left -= delta
+		if build_left <= 0.0:
+			_finish_build()
+		else:
+			_bar.set_health(_build_total - build_left, _build_total)  # build progress
+		return
 	_cooldown -= delta
 	var target := Targeting.nearest_enemy(get_tree(), global_position, stats.range)
 	if target != null:
@@ -145,6 +162,14 @@ func take_damage(amount: float) -> void:
 		if Net.game != null:
 			Net.game.host_turret_died(self)
 		queue_free()
+
+func _finish_build() -> void:
+	building = false
+	modulate = Color.WHITE
+	_bar.set_health(hp, max_hp)
+	Fx.float_text(global_position, "%s online" % stats.label, Color(0.5, 0.9, 1.0))
+	if not puppet:
+		Sfx.play("buy", 0.0)
 
 func death_fx() -> void:
 	Fx.shake(5.0)
