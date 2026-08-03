@@ -28,5 +28,16 @@ the live HUD to the mockup.
 - Rajdhani is a condensed techy sans (the primary HUD face); Share Tech Mono is
   the monospace flavour text; Oxanium is the chunky alert face.
 
+## Available in the project (added to assets/fonts/, all OFL)
+
+- **Rajdhani** — `assets/fonts/Rajdhani/Rajdhani-{Bold,SemiBold,Medium,Regular,Light}.ttf`
+  (the primary HUD face; has the exact weights the mapping calls for).
+- **Oxanium** — `assets/fonts/Oxanium/static/Oxanium-Bold.ttf` (+ other weights);
+  variable font also present. Used for major alerts.
+- **Orbitron** — `assets/fonts/Orbitron/static/Orbitron-{Regular,Medium,Bold,...}.ttf`.
+  NOTE: the mapping listed **Share Tech Mono** for tiny technical text, which is
+  NOT in the project — Orbitron was added instead. Decide next session whether
+  Orbitron stands in for the flavour/mono text, or grab Share Tech Mono too.
+
 This is reference for the Stage B HUD restyle (matching fonts + segmented bars +
 button art to the mockup).
