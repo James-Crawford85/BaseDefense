@@ -1,5 +1,17 @@
 # Steel Tide — UI Fonts
 
+## Usage direction (locked)
+
+- **Rajdhani + Oxanium are the two house fonts** — use them across all UI
+  everywhere (menus, HUD, shop, stats, tooltips) for a unified look. Rajdhani is
+  the everyday face (labels, numbers, values); Oxanium is the heavier accent face
+  (titles, alerts, headers).
+- **Orbitron: sparingly** — an occasional "something a bit different but still
+  fitting" flourish, not a workhorse.
+- Goal: consistency. Replace the current default engine font on every label with
+  one of the two house fonts during the Stage B restyle.
+
+
 Fonts used in the in-game UI art (`assets/ui/InGameUI_Example.png`), for matching
 the live HUD to the mockup.
 
