@@ -21,6 +21,12 @@ const TOWER_BUILD_TIME := 4.0  # seconds a placed tower spends vulnerable before
 const FINAL_WAVE := WaveData.FINAL_WAVE
 const TURRET_OFFSET := Vector2(46, 0)  # "just ahead" = toward the enemy side
 const SNAPSHOT_INTERVAL := 0.08
+# The playfield is inset into the HUD frame's centre window (assets/ui/ingame_frame).
+# Fractions of the base viewport, matched to where the frame's window sits.
+const PLAY_INSET_LEFT := 0.180
+const PLAY_INSET_RIGHT := 0.024
+const PLAY_INSET_TOP := 0.073
+const PLAY_INSET_BOTTOM := 0.090
 
 # Landscape layout, derived from the viewport: enemies stream in from the
 # RIGHT, the fortress wall is a vertical line at ~21% width, core at far left.
@@ -28,6 +34,7 @@ var arena_w: float
 var arena_h: float
 var wall_x: float
 var core_pos: Vector2
+var _play_rect: Rect2  # where the arena sits on screen (inside the HUD frame window)
 
 var state: State = State.MENU
 var wave_index: int = -1
@@ -63,8 +70,15 @@ var _smoke_snaps := 0
 func _ready() -> void:
 	Game.reset()
 	Net.game = self
-	arena_w = get_viewport_rect().size.x
-	arena_h = get_viewport_rect().size.y
+	# Arena fills the frame's centre window, not the whole viewport, so the border
+	# UI (build sidebar, top stats, bottom bars) never overlaps the playfield.
+	var vp := get_viewport_rect().size
+	_play_rect = Rect2(
+		vp.x * PLAY_INSET_LEFT, vp.y * PLAY_INSET_TOP,
+		vp.x * (1.0 - PLAY_INSET_LEFT - PLAY_INSET_RIGHT),
+		vp.y * (1.0 - PLAY_INSET_TOP - PLAY_INSET_BOTTOM))
+	arena_w = _play_rect.size.x
+	arena_h = _play_rect.size.y
 	wall_x = arena_w * 0.215
 	core_pos = Vector2(arena_w * 0.08, arena_h / 2.0)
 	_build_camera()
@@ -141,7 +155,9 @@ func _smoke_extras() -> void:
 
 func _build_camera() -> void:
 	var cam := Camera2D.new()
-	cam.position = Vector2(arena_w / 2.0, arena_h / 2.0)
+	# Offset so world (0,0) lands at the frame window's top-left on screen, placing
+	# the whole arena inside the window. get_global_mouse_position stays correct.
+	cam.position = get_viewport_rect().size / 2.0 - _play_rect.position
 	add_child(cam)
 	cam.make_current()
 	Fx.camera = cam

@@ -43,6 +43,7 @@ func _ready() -> void:
 	var vs := get_viewport().get_visible_rect().size
 	_w = vs.x
 	_h = vs.y
+	_build_frame()
 	_build_hud()
 	_build_towerbar()
 	_build_stats_panel()
@@ -51,6 +52,19 @@ func _ready() -> void:
 	_build_levelup()
 	Game.money_changed.connect(_on_money_changed)
 	_on_money_changed(Game.money)
+
+## The metal HUD frame with its playfield window keyed out. Sits behind every
+## other HUD element (added first) so text/bars/buttons render on its borders.
+func _build_frame() -> void:
+	if not ResourceLoader.exists("res://assets/ui/ingame_frame.png"):
+		return
+	var f := TextureRect.new()
+	f.texture = load("res://assets/ui/ingame_frame.png")
+	f.set_anchors_preset(Control.PRESET_FULL_RECT)
+	f.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	f.stretch_mode = TextureRect.STRETCH_SCALE
+	f.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(f)
 
 func _build_hud() -> void:
 	_money_label = _label(self, "$0", Vector2(16, 8), 22, Color(1.0, 0.9, 0.4))
