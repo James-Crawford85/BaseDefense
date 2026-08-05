@@ -87,6 +87,7 @@ func _build_main() -> void:
 	var title := Label.new()
 	title.text = "PAUSED"
 	title.add_theme_font_size_override("font_size", 40)
+	Fonts.apply(title, Fonts.title_bold)  # Oxanium headline
 	title.add_theme_color_override("font_color", ACCENT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.position = Vector2(0, _h * 0.2)

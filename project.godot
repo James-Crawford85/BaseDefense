@@ -19,6 +19,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 
 Game="*res://scripts/game.gd"
 Fx="*res://scripts/fx.gd"
+Fonts="*res://scripts/fonts.gd"
 Audio="*res://scripts/audio.gd"
 Sfx="*res://scripts/sfx.gd"
 Net="*res://scripts/net.gd"
@@ -30,6 +31,10 @@ window/size/viewport_width=1020
 window/size/viewport_height=573
 window/size/mode=3
 window/stretch/mode="canvas_items"
+
+[gui]
+
+theme/custom_font="res://assets/fonts/Rajdhani/Rajdhani-Medium.ttf"
 
 [input]
 

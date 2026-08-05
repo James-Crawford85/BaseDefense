@@ -203,6 +203,7 @@ func _hud_button(parent: Node, title: String, subtitle: String, size: Vector2, c
 	t.text = title
 	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	t.add_theme_font_size_override("font_size", 22 if compact else 32)
+	Fonts.apply(t, Fonts.title_bold)  # Oxanium for the command buttons
 	t.add_theme_color_override("font_color", BTN_TITLE)
 	t.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	t.add_theme_constant_override("outline_size", 5)
@@ -423,7 +424,7 @@ func _on_settings_pressed() -> void:
 
 func _build_settings() -> void:
 	_settings_screen = _screen(0.62)
-	_centered(_settings_screen, "SETTINGS", _h * 0.07, 34)
+	Fonts.apply(_centered(_settings_screen, "SETTINGS", _h * 0.07, 34), Fonts.title_bold)
 
 	# Shared settings component (Audio + Video), also used by the pause menu.
 	var panel := SettingsPanel.new()
@@ -460,6 +461,7 @@ func _on_join_pressed() -> void:
 func _build_lobby() -> void:
 	_lobby_screen = _screen(0.62)
 	_lobby_title = _centered(_lobby_screen, "MISSION PREP", _h * 0.045, 34)
+	Fonts.apply(_lobby_title, Fonts.title_bold)
 	_lobby_context = _centered(_lobby_screen, "", _h * 0.125, 14, TEXT_DIM)
 
 	# Class cards: a tank portrait shows the name only until hovered, when the
@@ -692,7 +694,7 @@ func _on_leave_pressed() -> void:
 
 func _build_join() -> void:
 	_join_screen = _screen(0.62)
-	_centered(_join_screen, "JOIN GAME", _h * 0.05, 34)
+	Fonts.apply(_centered(_join_screen, "JOIN GAME", _h * 0.05, 34), Fonts.title_bold)
 	_join_status = _centered(_join_screen, "", _h * 0.14, 14, TEXT_DIM)
 
 	_list_box = VBoxContainer.new()
