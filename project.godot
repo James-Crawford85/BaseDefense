@@ -87,6 +87,7 @@ dash={
 2d_physics/layer_4="projectiles"
 2d_physics/layer_5="structures"
 2d_physics/layer_6="player_bounds"
+2d_physics/layer_7="gates"
 
 [rendering]
 

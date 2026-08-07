@@ -69,14 +69,10 @@ func _ready() -> void:
 		add_child(_bar)
 		return
 	collision_layer = 1 << 2
-	collision_mask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4)
+	collision_mask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4) | (1 << 6)  # incl. gates
+	# Every enemy holds the row it spawned in. Gap-seekers only peel off toward an
+	# actual opening once a wall or gate is breached (see _effective_lane_y).
 	_march_y = position.y
-	if stats.seeks_gaps and not _gap_ys.is_empty():
-		var nearest: float = _gap_ys[0]
-		for gy in _gap_ys:
-			if absf(gy - position.y) < absf(nearest - position.y):
-				nearest = gy
-		_march_y = nearest + randf_range(-20.0, 20.0)
 
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
@@ -173,21 +169,53 @@ func _current_goal() -> Vector2:
 	if _attack_target != null and is_instance_valid(_attack_target):
 		return _attack_target.global_position
 	# March straight left down the lane until fully past the wall band, then
-	# head for the core.
+	# head for the core. Gap-seekers steer toward the nearest breach instead.
 	if global_position.x > _wall_line_x - 70.0:
-		return Vector2(_wall_line_x - 80.0, _march_y)
+		return Vector2(_wall_line_x - 80.0, _effective_lane_y())
 	if _core != null and is_instance_valid(_core):
 		return _core.global_position
 	return global_position + Vector2.LEFT * 100.0
 
+## The row (y) an enemy drives toward. Normally its spawn row; a gap-seeker peels
+## off to the nearest open breach (destroyed wall/gate) once one exists.
+func _effective_lane_y() -> float:
+	if stats.seeks_gaps:
+		var by := _nearest_breach_y()
+		if not is_nan(by):
+			return by
+	return _march_y
+
+func _has_open_breach() -> bool:
+	for grp in ["walls", "gates"]:
+		for n in get_tree().get_nodes_in_group(grp):
+			if n is WallSegment and (n as WallSegment).destroyed:
+				return true
+	return false
+
+## Row (y) of the destroyed wall/gate nearest this enemy's row, or NAN if none.
+func _nearest_breach_y() -> float:
+	var best_y := NAN
+	var best_d := INF
+	for grp in ["walls", "gates"]:
+		for n in get_tree().get_nodes_in_group(grp):
+			var seg := n as WallSegment
+			if seg == null or not seg.destroyed:
+				continue
+			var d := absf(seg.global_position.y - position.y)
+			if d < best_d:
+				best_d = d
+				best_y = seg.global_position.y
+	return best_y
+
 func _nearest_victim() -> Node2D:
 	var best: Node2D = null
 	var best_d: float = stats.attack_range * stats.attack_range
-	for group in ["players", "walls", "structures"]:
-		# Gap-seekers never stop to shoot walls — they slip through and hunt
-		# what's behind, which keeps the breach-rush pressure alive now that
-		# every vehicle is armed.
-		if group == "walls" and stats.seeks_gaps:
+	# A gap-seeker only ignores fortifications once a breach exists — then it rushes
+	# the opening instead of stopping to shoot walls/gates. Until then it engages
+	# the wall or gate in its own row like any other enemy.
+	var breaching: bool = stats.seeks_gaps and _has_open_breach()
+	for group in ["players", "walls", "structures", "gates"]:
+		if breaching and (group == "walls" or group == "gates"):
 			continue
 		for n in get_tree().get_nodes_in_group(group):
 			var node := n as Node2D
@@ -195,7 +223,7 @@ func _nearest_victim() -> Node2D:
 				continue
 			if node is Player and node.hp <= 0.0:
 				continue
-			if node is WallSegment and node.destroyed:
+			if node is WallSegment and node.destroyed:  # covers gates (Gate extends WallSegment)
 				continue
 			var d := node.global_position.distance_squared_to(global_position)
 			if d < best_d:

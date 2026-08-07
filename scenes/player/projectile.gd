@@ -27,7 +27,7 @@ func _ready() -> void:
 	if not visual:
 		collision_layer = 1 << 3
 		if _enemy_shot:
-			collision_mask = (1 << 0) | (1 << 1) | (1 << 4)
+			collision_mask = (1 << 0) | (1 << 1) | (1 << 4) | (1 << 6)  # walls, player, structures, gates
 		else:
 			collision_mask = 1 << 2
 		var shape := CollisionShape2D.new()

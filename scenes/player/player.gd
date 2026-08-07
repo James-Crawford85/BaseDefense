@@ -49,6 +49,29 @@ var _dash_time: float = 0.0
 var _time_since_hit: float = 999.0  # drives shield recharge delay
 var _shield_ring: Line2D = null
 
+# Sprite chassis art, per class: a 2-frame track-animated base plus a separately-
+# rotating turret. `turret_frames` 2 means the turret has an idle frame (0) and a
+# firing/muzzle-flash frame (1). Classes without art fall back to the polygon tank.
+const CHASSIS := {
+	"heavy": {
+		"base": "res://assets/Tank Base, Heavy - Sprite.png",
+		"turret": "res://assets/Tank Base, Heavy - Canon.png",
+		"turret_frames": 1,
+	},
+	"assault": {
+		"base": "res://assets/Tank Base, Medium - Sprite.png",
+		"turret": "res://assets/Tank Base, Autocanon - Sprite.png",
+		"turret_frames": 2,
+	},
+}
+const SPRITE_SCALE := 0.5
+var _base_sprite: Sprite2D = null
+var _cannon_sprite: Sprite2D = null
+var _cannon_frames := 1
+var _track_timer := 0.0
+var _track_frame := 0
+var _last_anim_pos := Vector2.ZERO
+
 func setup(key: String) -> void:
 	class_key = key
 
@@ -82,7 +105,11 @@ func _ready() -> void:
 	circle.radius = 16.0
 	shape.shape = circle
 	add_child(shape)
-	_build_hull(data.color)
+	var cfg: Variant = CHASSIS.get(class_key, null)
+	if cfg != null and ResourceLoader.exists(cfg.base) and ResourceLoader.exists(cfg.turret):
+		_build_sprite_hull(cfg)
+	else:
+		_build_hull(data.color)
 
 	# Shield ring: a cyan halo whose opacity tracks the shield fraction.
 	_shield_ring = Line2D.new()
@@ -105,6 +132,10 @@ func _ready() -> void:
 		add_child(mount)
 		mounts.append(mount)
 	mounts[0].set_weapon(data.start_weapon, 1)
+	# On the sprite chassis the cannon sprite is the main gun's visual, so hide
+	# mount #1's placeholder polygon gun.
+	if _cannon_sprite != null and not mounts.is_empty():
+		mounts[0].set_gun_hidden(true)
 
 func _build_hull(color: Color) -> void:
 	for tx in [-17.0, 10.0]:
@@ -124,6 +155,49 @@ func _build_hull(color: Color) -> void:
 		Vector2(-6, -20), Vector2(6, -20), Vector2(6, -16), Vector2(-6, -16)])
 	stripe.color = color.lightened(0.35)
 	add_child(stripe)
+
+## Sprite chassis: track-animated base (frames flip while moving) + a main gun
+## that rotates to face the nearest enemy, both centred on the hull. The base
+## inherits hull rotation; the cannon's global rotation is driven independently.
+func _build_sprite_hull(cfg: Dictionary) -> void:
+	_base_sprite = Sprite2D.new()
+	_base_sprite.texture = load(cfg.base)
+	_base_sprite.hframes = 2         # two track-animation frames side by side
+	_base_sprite.frame = 0
+	_base_sprite.scale = Vector2(SPRITE_SCALE, SPRITE_SCALE)
+	_base_sprite.z_index = 1
+	add_child(_base_sprite)
+	_cannon_frames = int(cfg.turret_frames)
+	_cannon_sprite = Sprite2D.new()
+	_cannon_sprite.texture = load(cfg.turret)
+	_cannon_sprite.hframes = _cannon_frames   # frame 0 idle, frame 1 muzzle flash
+	_cannon_sprite.frame = 0
+	_cannon_sprite.scale = Vector2(SPRITE_SCALE, SPRITE_SCALE)
+	_cannon_sprite.z_index = 2       # main gun draws over the base
+	add_child(_cannon_sprite)
+	_last_anim_pos = global_position
+
+## Drives the sprite chassis visuals on every peer (local and remote tanks).
+func _process(delta: float) -> void:
+	if _base_sprite == null:
+		return
+	# Track animation: alternate the two frames while the tank is actually moving.
+	var moved := global_position.distance_to(_last_anim_pos)
+	_last_anim_pos = global_position
+	if moved > 0.4:
+		_track_timer += delta
+		if _track_timer >= 0.08:
+			_track_timer = 0.0
+			_track_frame = 1 - _track_frame
+			_base_sprite.frame = _track_frame
+	# Main gun sprite follows mount #1's real aim, so barrel and shots agree.
+	if _cannon_sprite != null and not mounts.is_empty():
+		var m0: WeaponMount = mounts[0]
+		_cannon_sprite.visible = m0.weapon_key != ""
+		_cannon_sprite.global_rotation = m0.barrel_world_rotation()
+		# Two-frame turrets flip to the muzzle-flash frame briefly after each shot.
+		if _cannon_frames >= 2:
+			_cannon_sprite.frame = 1 if m0.muzzle_flash > 0.0 else 0
 
 func is_local() -> bool:
 	return not Net.active() or peer_id == Net.my_id()

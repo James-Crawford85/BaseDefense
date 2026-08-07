@@ -13,10 +13,14 @@ var arc_half := PI      # PI = full 360
 var weapon_key := ""
 var level := 0
 
+const MUZZLE_FLASH_TIME := 0.06   # seconds the turret shows its firing frame per shot
+
 var _stats: Dictionary = {}
 var _cooldown := 0.0
 var _gun: Node2D
 var _cone: Polygon2D
+var hide_visual := false   # true when an external turret sprite replaces the gun art
+var muzzle_flash := 0.0    # >0 briefly after a shot, drives a turret sprite's flash frame
 
 func set_weapon(key: String, lvl: int) -> void:
 	weapon_key = key
@@ -78,11 +82,27 @@ func _rebuild_gun() -> void:
 	band.color = WeaponData.TIER_COLORS[level - 1]
 	_gun.add_child(band)
 	_gun.rotation = arc_center + PI / 2.0
+	_gun.visible = not hide_visual   # keep hidden across weapon upgrades
+
+## World heading of this mount's barrel (barrel points up / -Y at rest), for
+## aligning an external turret sprite to the gun's real aim. Falls back to the
+## tank's facing when no gun is mounted.
+func barrel_world_rotation() -> float:
+	if _gun == null or tank == null:
+		return tank.global_rotation if tank != null else 0.0
+	return tank.global_rotation + _gun.rotation
+
+## Hide/show the built-in polygon gun (used when a sprite turret stands in for it).
+func set_gun_hidden(h: bool) -> void:
+	hide_visual = h
+	if _gun != null:
+		_gun.visible = not h
 
 func _physics_process(delta: float) -> void:
 	if weapon_key == "" or tank == null:
 		return
 	_cooldown -= delta
+	muzzle_flash = maxf(muzzle_flash - delta, 0.0)
 	var range_eff: float = _stats.range * tank.range_mult
 	var target := _acquire(range_eff)
 
@@ -112,6 +132,7 @@ func _physics_process(delta: float) -> void:
 		p.position = global_position + dir * 14.0
 		tank.get_parent().add_child(p)
 		_cooldown = 1.0 / (_stats.fire_rate * tank.fire_rate_mult)
+		muzzle_flash = MUZZLE_FLASH_TIME
 		var sfx: String = SHOT_SFX.get(weapon_key, "shot_auto")
 		Sfx.play(sfx)
 		if Net.game != null:
@@ -125,7 +146,7 @@ func _flame_tick(target: Node2D, range_eff: float) -> void:
 		_cone.visible = false
 		return
 	_cone.rotation = _gun.rotation - PI / 2.0
-	_cone.visible = true
+	_cone.visible = not hide_visual
 	if _cooldown > 0.0 or not Net.is_authority():
 		return
 	_cooldown = 1.0 / (_stats.fire_rate * tank.fire_rate_mult)

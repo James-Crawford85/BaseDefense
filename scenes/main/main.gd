@@ -216,13 +216,18 @@ const WALL_MARGIN := 10.0
 func _build_fortress() -> void:
 	var slot_h := (arena_h - WALL_MARGIN * 2.0) / WALL_SLOTS
 	for i in range(WALL_SLOTS):
+		# Gap slots get a gate (allies pass, enemies are blocked); other slots a
+		# solid wall. Both go in `walls` so the shop repairs/rebuilds them together
+		# and multiplayer snapshots them in the same order on every peer.
+		var seg: WallSegment
 		if i in GAP_SLOTS:
-			continue
-		var wall := WallSegment.new()
-		wall.seg_size = Vector2(36.0, slot_h - 4.0)
-		wall.position = Vector2(wall_x, WALL_MARGIN + slot_h * (i + 0.5))
-		entity_layer.add_child(wall)
-		walls.append(wall)
+			seg = Gate.new()
+		else:
+			seg = WallSegment.new()
+		seg.seg_size = Vector2(36.0, slot_h - 4.0)
+		seg.position = Vector2(wall_x, WALL_MARGIN + slot_h * (i + 0.5))
+		entity_layer.add_child(seg)
+		walls.append(seg)
 	core = FortressCore.new()
 	core.position = core_pos
 	entity_layer.add_child(core)

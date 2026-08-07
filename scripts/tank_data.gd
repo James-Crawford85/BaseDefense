@@ -11,10 +11,11 @@ const CLASSES: Dictionary = {
 		"turn_speed": 2.8, "crit_chance": 0.05,
 		"start_weapon": "autocannon",
 		"blurb": "Balanced hull. +10% damage.",
+		# Slot positions match the Medium sprite's mount markers (at 0.5 sprite scale).
 		"slots": [
-			{"pos": Vector2(0, -2), "center": -PI / 2, "half": PI},      # main turret, 360
-			{"pos": Vector2(-15, 4), "center": PI, "half": PI / 2},      # left mount, 180
-			{"pos": Vector2(15, 4), "center": 0.0, "half": PI / 2},      # right mount, 180
+			{"pos": Vector2(0, 0), "center": -PI / 2, "half": PI},       # main turret, 360
+			{"pos": Vector2(-15, 1), "center": PI, "half": PI / 2},      # left mount, 180
+			{"pos": Vector2(15, 1), "center": 0.0, "half": PI / 2},      # right mount, 180
 		],
 	},
 	"heavy": {
@@ -25,11 +26,13 @@ const CLASSES: Dictionary = {
 		"shield": 40.0, "shield_recharge_rate": 0.33, "shield_recharge_delay": 2.5,
 		"start_weapon": "cannon",
 		"blurb": "Slow fortress. 2 armor, 4 weapon slots.",
+		# Slot positions match the Heavy sprite's mount markers (at 0.5 sprite scale):
+		# main turret centre, left/right side sponsons, rear mount.
 		"slots": [
-			{"pos": Vector2(0, -2), "center": -PI / 2, "half": PI},
-			{"pos": Vector2(-16, 4), "center": PI, "half": PI / 2},
-			{"pos": Vector2(16, 4), "center": 0.0, "half": PI / 2},
-			{"pos": Vector2(0, 16), "center": PI / 2, "half": PI / 2},   # rear mount, 180
+			{"pos": Vector2(0, 0), "center": -PI / 2, "half": PI},       # main turret, 360
+			{"pos": Vector2(-19, 1), "center": PI, "half": PI / 2},      # left sponson
+			{"pos": Vector2(19, 1), "center": 0.0, "half": PI / 2},      # right sponson
+			{"pos": Vector2(0, 23), "center": PI / 2, "half": PI / 2},   # rear mount, 180
 		],
 	},
 	"scout": {
